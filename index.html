@@ -89,8 +89,8 @@
     </header>
 
     <div class="ds-monitor">
-        <div><span id="ds-opt-dot" class="status-dot standby">🟡</span>BINANCE OPTIONS REST/WS: <span id="ds-opt-text" class="standby">SEEDING</span></div>
-        <div><span id="ds-spot-dot" class="status-dot standby">🟡</span>BINANCE SPOT: <span id="ds-spot-text" class="standby">CONNECTING</span></div>
+        <div><span id="ds-opt-dot" class="status-dot standby">馃煛</span>BINANCE OPTIONS REST/WS: <span id="ds-opt-text" class="standby">SEEDING</span></div>
+        <div><span id="ds-spot-dot" class="status-dot standby">馃煛</span>BINANCE SPOT: <span id="ds-spot-text" class="standby">CONNECTING</span></div>
         <div style="margin-left:auto;"><span id="app-status" class="standby">Initializing snapshot...</span></div>
     </div>
 
@@ -349,7 +349,7 @@ function getBinanceOptionUrl(contract) {
 
 function renderChartIcon(contract, title = 'Open Binance Chart') {
     if (!contract) return '';
-    return `<a class="chart-link" href="${getBinanceOptionUrl(contract)}" target="_blank" title="${title}">📈</a>`;
+    return `<a class="chart-link" href="${getBinanceOptionUrl(contract)}" target="_blank" title="${title}">馃搱</a>`;
 }
 
 const ALL = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE'];
@@ -428,14 +428,53 @@ function switchTab(tabId) {
     document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
 }
 
-function updateSourceStatus(source, status) {
+/* ---- Feed health tracking: drives the two status indicators in the top bar ---- */
+const Feed = { t0: Date.now(), restAt: 0, restErr: '', wsAt: 0, wsOpen: false, wsOpenedAt: 0, altAt: 0, altOpen: false };
+const ago = t => { const sec = Math.max(0, Math.round((Date.now() - t) / 1000)); return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m`; };
+
+function updateSourceStatus(source, status, detail) {
     const elText = document.getElementById(`ds-${source}-text`);
     const elDot = document.getElementById(`ds-${source}-dot`);
     if (!elText || !elDot) return;
+    const k = status.toLowerCase();
+    const cls = k === 'live' ? 'live' : (k === 'error' ? 'error' : 'standby');
     elText.innerText = status;
-    elText.className = status.toLowerCase() === 'error' ? 'error' : (status.toLowerCase() === 'live' ? 'live' : 'standby');
-    elDot.className = `status-dot ${elText.className}`;
-    elDot.innerText = status.toLowerCase() === 'error' ? '🔴' : (status.toLowerCase() === 'live' ? '🟢' : '🟡');
+    elText.className = cls;
+    elText.title = detail || '';
+    elDot.className = `status-dot ${cls}`;
+    elDot.innerText = cls === 'live' ? '馃煝' : (cls === 'error' ? '馃敶' : '馃煛');
+}
+
+// Single source of truth for the options-feed indicator (top-left) and the status message (top-right).
+// Called on every feed event and once per second so it also flips to STALE/ERROR when data stops.
+function refreshFeedStatus() {
+    const now = Date.now();
+    const total = Object.keys(liveOptionStore).length;
+    const wsFresh = Feed.wsAt && now - Feed.wsAt < 20000;
+    const restFresh = Feed.restAt && now - Feed.restAt < 45000 && total > 0;
+    let status, msg;
+    if (wsFresh) {
+        status = 'LIVE';
+        msg = `Live 路 WebSocket streaming 路 ${total.toLocaleString()} contracts 路 last tick ${ago(Feed.wsAt)} ago`;
+    } else if (restFresh) {
+        status = 'LIVE';
+        msg = `Live 路 REST polling (WebSocket ${Feed.wsOpen ? 'quiet' : 'reconnecting'}) 路 ${total.toLocaleString()} contracts 路 updated ${ago(Feed.restAt)} ago`;
+    } else if (total > 0 && (Feed.wsAt || Feed.restAt)) {
+        status = 'STALE';
+        msg = `Options data stale 路 last update ${ago(Math.max(Feed.wsAt, Feed.restAt))} ago 路 reconnecting鈥;
+    } else if (now - Feed.t0 > 25000) {
+        status = 'ERROR';
+        msg = `Cannot reach Binance options feed${Feed.restErr ? ' (' + Feed.restErr + ')' : ''} 路 retrying鈥;
+    } else {
+        status = 'SEEDING';
+        msg = 'Initializing snapshot鈥?;
+    }
+    updateSourceStatus('opt', status, msg);
+    const appEl = document.getElementById('app-status');
+    if (appEl) {
+        appEl.innerText = msg;
+        appEl.className = status === 'LIVE' ? 'live' : (status === 'ERROR' ? 'error' : 'standby');
+    }
 }
 
 /* =========================================================
@@ -474,12 +513,21 @@ function computeTradeFees(trade, currentPrice, currentUnderlying) {
    3. MULTI-TIMEFRAME TA & VOLATILITY ENGINE
 ========================================================= */
 const HZ = {
-    intraday: { label: 'Intraday (≤1 day)', tf: ['5m', '15m', '1h'], ideal: [8, 30], rv: { tf: '1h', n: 48, ppy: 8760, perDay: 24, baN: 72 },
-        cfg: { holdH: 4, minHours: 6, maxHours: 40, t1ATR: 1.25, t2ATR: 2.2, stopATR: 0.8, hardStopATR: 1.6, maxBurn: 8, minAtrPct: 0.12 } },
-    swing: { label: '1–3 days', tf: ['15m', '1h', '4h'], vwapN: 192, ideal: [30, 84], rv: { tf: '1h', n: 96, ppy: 8760, perDay: 24, baN: 168 },
-        cfg: { holdH: 36, minHours: 20, maxHours: 100, t1ATR: 1.2, t2ATR: 2.0, stopATR: 1.0, hardStopATR: 1.8, maxBurn: 15, minAtrPct: 0.3 } },
+    /* cfg = shared settings (used by spreads). nk = overrides applied ONLY to Single Leg Outright mode.
+       Long options bleed theta, so single-leg expiry windows are sized to the hold time (expiry >= ~2x hold)
+       and target/stop ratios are set so a trade can realistically clear the R/R hurdle after theta. */
+    intraday: { label: 'Intraday (鈮? day)', tf: ['5m', '15m', '1h'], ideal: [8, 30], rv: { tf: '1h', n: 48, ppy: 8760, perDay: 24, baN: 72 },
+        cfg: { holdH: 4, minHours: 6, maxHours: 40, t1ATR: 1.25, t2ATR: 2.2, stopATR: 0.8, hardStopATR: 1.6, maxBurn: 8, minAtrPct: 0.12 },
+        nk:  { minHours: 6, maxHours: 48, maxBurn: 14, t1ATR: 1.45, t2ATR: 2.4, stopATR: 0.75, hardStopATR: 1.5 } },
+    swing: { label: '1鈥? days', tf: ['15m', '1h', '4h'], vwapN: 192, ideal: [30, 84], rv: { tf: '1h', n: 96, ppy: 8760, perDay: 24, baN: 168 },
+        cfg: { holdH: 36, minHours: 20, maxHours: 100, t1ATR: 1.2, t2ATR: 2.0, stopATR: 1.0, hardStopATR: 1.8, maxBurn: 15, minAtrPct: 0.3 },
+        nk:  { minHours: 60, maxHours: 280, maxBurn: 24, t1ATR: 1.7, t2ATR: 2.8, stopATR: 0.8, hardStopATR: 1.5 } },
     weekly: { label: 'Weekly (~5 days)', tf: ['1h', '4h', '1d'], vwapN: 120, ideal: [96, 200], rv: { tf: '1d', n: 30, ppy: 365, perDay: 1, baN: 60 },
-        cfg: { holdH: 120, minHours: 72, maxHours: 260, t1ATR: 1.0, t2ATR: 1.8, stopATR: 1.0, hardStopATR: 1.7, maxBurn: 25, minAtrPct: 0.8 } }
+        cfg: { holdH: 120, minHours: 72, maxHours: 260, t1ATR: 1.0, t2ATR: 1.8, stopATR: 1.0, hardStopATR: 1.7, maxBurn: 25, minAtrPct: 0.8 },
+        nk:  { minHours: 200, maxHours: 700, maxBurn: 35, t1ATR: 1.6, t2ATR: 2.6, stopATR: 0.7, hardStopATR: 1.4 } },
+    monthly: { label: 'Monthly (~20 days)', tf: ['4h', '1d', '1w'], vwapN: 180, ideal: [480, 1500], rv: { tf: '1d', n: 60, ppy: 365, perDay: 1, baN: 90 },
+        cfg: { holdH: 480, minHours: 240, maxHours: 1100, t1ATR: 1.5, t2ATR: 2.5, stopATR: 0.7, hardStopATR: 1.3, maxBurn: 40, minAtrPct: 2.0 },
+        nk:  { minHours: 600, maxHours: 2500, maxBurn: 45 } }
 };
 
 const GATE = {
@@ -633,52 +681,69 @@ function parseOptionSymbol(symbol) {
     return { asset, strike, side, expiry, symbol };
 }
 
+const EAPI = 'https://eapi.binance.com';
+
+async function getJson(url, ms = 8000) {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+    try {
+        const r = await fetch(url, { signal: ctl.signal });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+    } finally { clearTimeout(timer); }
+}
+
+function rebuildOptionGroups() {
+    const g = Object.fromEntries(ALL.map(a => [a, []]));
+    Object.values(liveOptionStore).forEach(o => g[o.asset] && g[o.asset].push(o));
+    ALL.forEach(a => AppState.options[a] = g[a]);
+}
+
+// REST snapshot. Greeks / mark price / IV come from /eapi/v1/mark; bid/ask from /eapi/v1/ticker
+// (the old code read everything from /ticker, which has no Greeks). Also used as a fallback poll if the WebSocket goes quiet.
 async function seedOptionsData() {
     try {
-        updateSourceStatus('opt', 'SEEDING');
-        const res = await fetch('https://eapi.binance.com/eapi/v1/ticker');
-        if (!res.ok) throw new Error('REST ticker failed');
-        const list = await res.json();
+        const [marks, tickers] = await Promise.all([
+            getJson(EAPI + '/eapi/v1/mark'),
+            getJson(EAPI + '/eapi/v1/ticker').catch(() => [])
+        ]);
+        if (!Array.isArray(marks)) throw new Error('unexpected /mark response');
+        const tk = Object.fromEntries((Array.isArray(tickers) ? tickers : []).map(t => [t.symbol, t]));
         const now = Date.now();
-        list.forEach(item => {
-            const parsed = parseOptionSymbol(item.symbol);
-            if (!parsed || parsed.expiry < now) return;
-            const mark = parseFloat(item.markPrice) || 0;
-            const bid = parseFloat(item.bidPrice) || 0;
-            const ask = parseFloat(item.askPrice) || 0;
+        marks.forEach(m => {
+            const parsed = parseOptionSymbol(m.symbol);
+            if (!parsed || parsed.expiry < now || !ALL.includes(parsed.asset)) return;
+            const ex = liveOptionStore[m.symbol];
+            if (ex && ex.src === 'ws' && now - ex.ts < 15000) return;   // never overwrite fresher WebSocket data
+            const t = tk[m.symbol] || {};
+            const mark = parseFloat(m.markPrice) || 0;
+            const bid = parseFloat(t.bidPrice) || 0;
+            const ask = parseFloat(t.askPrice) || 0;
             let spread = 999;
             if (bid > 0 && ask > 0 && mark > 0) spread = ((ask - bid) / mark) * 100;
             else if (ask > 0 && mark > 0) spread = ((ask - mark) / mark) * 100;
-
-            liveOptionStore[item.symbol] = {
-                symbol: item.symbol,
-                asset: parsed.asset,
-                side: parsed.side,
-                strike: parsed.strike,
-                expiry: parsed.expiry,
-                mark,
-                bid,
-                ask: ask > 0 ? ask : mark,
-                iv: parseFloat(item.markIV) || 0,
-                delta: parseFloat(item.delta) || 0,
-                gamma: parseFloat(item.gamma) || 0,
-                theta: parseFloat(item.theta) || 0,
-                vega: parseFloat(item.vega) || 0,
+            liveOptionStore[m.symbol] = {
+                ...(ex || {}),
+                symbol: m.symbol, asset: parsed.asset, side: parsed.side, strike: parsed.strike, expiry: parsed.expiry,
+                mark, bid, ask: ask > 0 ? ask : mark,
+                iv: parseFloat(m.markIV) || 0,
+                delta: parseFloat(m.delta) || 0,
+                gamma: parseFloat(m.gamma) || 0,
+                theta: -Math.abs(parseFloat(m.theta) || 0),          // long-option theta is always a cost
+                vega: parseFloat(m.vega) || 0,
                 spread: Math.max(0, spread),
-                volume: parseFloat(item.volume) || 0,
-                bidQty: parseFloat(item.bidQty) || 0,
-                askQty: parseFloat(item.askQty) || 0,
-                oi: parseFloat(item.openInterest) || 0
+                volume: parseFloat(t.volume) || (ex && ex.volume) || 0,
+                bidQty: (ex && ex.bidQty) || 0, askQty: (ex && ex.askQty) || 0, oi: (ex && ex.oi) || 0,
+                ts: now, src: 'rest'
             };
         });
-        const g = Object.fromEntries(ALL.map(a => [a, []]));
-        Object.values(liveOptionStore).forEach(o => g[o.asset] && g[o.asset].push(o));
-        ALL.forEach(a => AppState.options[a] = g[a]);
-        updateSourceStatus('opt', 'LIVE');
-        document.getElementById('app-status').innerText = 'REST Seeded. Live WS streaming...';
+        rebuildOptionGroups();
+        Feed.restAt = now;
+        Feed.restErr = '';
     } catch (e) {
-        console.warn('Initial REST seed failed; waiting for WebSocket stream', e);
+        Feed.restErr = (e && e.name === 'AbortError') ? 'REST timeout' : String((e && e.message) || e);
+        console.warn('REST options snapshot failed; relying on WebSocket stream', e);
     }
+    refreshFeedStatus();
 }
 
 async function fetchSpotData() {
@@ -720,31 +785,43 @@ function connectOptionsWebSocket() {
     const wsUrl = 'wss://fstream.binance.com/market/stream?streams=btcusdt@optionMarkPrice/ethusdt@optionMarkPrice';
     try {
         wsConnection = new WebSocket(wsUrl);
+        wsConnection.onopen = () => { Feed.wsOpen = true; Feed.wsOpenedAt = Date.now(); refreshFeedStatus(); };
         wsConnection.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
-                if (msg && msg.data) processIncomingOptions(msg.data);
+                if (msg && msg.data && processIncomingOptions(msg.data) > 0) {
+                    const first = !Feed.wsAt;
+                    Feed.wsAt = Date.now();
+                    if (first) refreshFeedStatus();      // flip to LIVE immediately on the first usable tick
+                }
             } catch (err) {}
         };
-        wsConnection.onclose = () => setTimeout(connectOptionsWebSocket, 4000);
-    } catch(err) { updateSourceStatus('opt', 'ERROR'); }
+        wsConnection.onerror = () => refreshFeedStatus();
+        wsConnection.onclose = () => { Feed.wsOpen = false; refreshFeedStatus(); setTimeout(connectOptionsWebSocket, 4000); };
+    } catch (err) {
+        Feed.wsOpen = false;
+        refreshFeedStatus();
+        setTimeout(connectOptionsWebSocket, 8000);
+    }
 }
 
 let altWs = null;
 function connectAltWebSocket() {
     const alts = ACTIVE().filter(a => ALT.includes(a));
-    if (altWs) { altWs.onclose = null; altWs.close(); altWs = null; }
+    if (altWs) { altWs.onclose = null; altWs.close(); altWs = null; Feed.altOpen = false; }
     if (!alts.length) return;
     try {
         altWs = new WebSocket('wss://fstream.binance.com/market/stream?streams=' + alts.map(a => a.toLowerCase() + 'usdt@optionMarkPrice').join('/'));
-        altWs.onmessage = e => { try { const m = JSON.parse(e.data); if (m && m.data) processIncomingOptions(m.data); } catch (err) {} };
-        altWs.onclose = () => setTimeout(connectAltWebSocket, 5000);
+        altWs.onopen = () => { Feed.altOpen = true; };
+        altWs.onmessage = e => { try { const m = JSON.parse(e.data); if (m && m.data && processIncomingOptions(m.data) > 0) Feed.altAt = Date.now(); } catch (err) {} };
+        altWs.onclose = () => { Feed.altOpen = false; setTimeout(connectAltWebSocket, 5000); };
     } catch (err) {}
 }
 
 function processIncomingOptions(data) {
     const items = Array.isArray(data) ? data : [data];
     const now = Date.now();
+    let accepted = 0;
 
     items.forEach(item => {
         if (!item || !item.s) return;
@@ -783,13 +860,14 @@ function processIncomingOptions(data) {
             vega,
             spread: Math.max(0, spread),
             bidQty: parseFloat(item.bq) || existing.bidQty || 0,
-            askQty: parseFloat(item.aq) || existing.askQty || 0
+            askQty: parseFloat(item.aq) || existing.askQty || 0,
+            ts: now, src: 'ws'
         };
+        accepted++;
     });
 
-    const g = Object.fromEntries(ALL.map(a => [a, []]));
-    Object.values(liveOptionStore).forEach(o => g[o.asset] && g[o.asset].push(o));
-    ALL.forEach(a => AppState.options[a] = g[a]);
+    if (accepted) rebuildOptionGroups();
+    return accepted;
 }
 
 /* =========================================================
@@ -846,9 +924,9 @@ function evaluateSetups() {
     AppState.autopicks = [];
     AppState.gates = {};
     const now = Date.now(), st = AppState.settings, H = HZ[st.horizon], G = GATE[st.gate] || GATE.normal;
-    const CFG = { minRR: 1.3, minEdge: 1.0, maxIvRv: 2.5, minAdx: G.minAdx, minRoom: G.minRoom, topN: 3, minDepth: st.minDepth || 0.05, ...H.cfg };
+    const CFG = { minRR: 1.3, minEdge: 1.0, maxIvRv: 2.5, minAdx: G.minAdx, minRoom: G.minRoom, topN: 3, minDepth: st.minDepth || 0.05, ...H.cfg, ...(st.tradeMode === 'naked' ? (H.nk || {}) : {}) };
     
-    document.getElementById('hz-info').innerHTML = `<strong>${H.label}</strong> · Mode: <strong>${st.tradeMode.toUpperCase()}</strong> · Expiries: ${fmtH(CFG.minHours)}–${fmtH(CFG.maxHours)} · Gates: <strong>${G.label}</strong> (ADX ≥ ${G.minAdx} · ${G.desc} · Room ≥ ${G.minRoom} ATR)`;
+    document.getElementById('hz-info').innerHTML = `<strong>${H.label}</strong> 路 Mode: <strong>${st.tradeMode.toUpperCase()}</strong> 路 Expiries: ${fmtH(CFG.minHours)}鈥?{fmtH(CFG.maxHours)} 路 Gates: <strong>${G.label}</strong> (ADX 鈮?${G.minAdx} 路 ${G.desc} 路 Room 鈮?${G.minRoom} ATR)`;
 
     ACTIVE().forEach(asset => {
         const id = asset.toLowerCase(), u = scoreUnderlying(asset), S = AppState.market[asset].price;
@@ -861,7 +939,7 @@ function evaluateSetups() {
 
         // GATE CHECKS
         if (!live.length) gate.push('Waiting for option data stream');
-        else if (!inWin.length) gate.push(`No ${H.label} expiry available`);
+        else if (!inWin.length) gate.push(`No expiry in the ${fmtH(CFG.minHours)}鈥?{fmtH(CFG.maxHours)} window for ${H.label}`);
         if (u.adx < CFG.minAdx) gate.push(`ADX ${u.adx.toFixed(0)} < ${CFG.minAdx} (Choppy market)`);
         if (u.atrPct < CFG.minAtrPct) gate.push(`ATR ${u.atrPct.toFixed(2)}% too low to beat spread`);
         if (tech < st.minScore) gate.push(`${dir} score ${tech} < ${st.minScore}`);
@@ -869,7 +947,7 @@ function evaluateSetups() {
         if (bad.length) gate.push(`${bad.map(i => H.tf[i]).join('/')} trend contradicts setup`);
         if (room < CFG.minRoom) gate.push(`Only ${room.toFixed(2)} ATR room to S/R obstacle`);
 
-        let status = gate.join(' · ');
+        let status = gate.join(' 路 ');
 
         if (!gate.length) {
             const targetDelta = st.strategy === 'conservative' ? 0.6 : (st.strategy === 'balanced' ? 0.4 : 0.25);
@@ -949,7 +1027,11 @@ function evaluateSetups() {
 
                     const ivrv = u.rv ? o.iv / u.rv : 1;
                     const thPct = Math.abs(o.theta) / o.mark * 100;
-                    const burn = thPct * CFG.holdH / 24;
+                    // Premium lost to time decay over the planned hold: larger of (a) linear theta and (b) a sqrt-time estimate,
+                    // because linear theta understates decay when the hold is a big share of the option's remaining life.
+                    const burnLin = thPct * CFG.holdH / 24;
+                    const burnSqrt = hrs > CFG.holdH ? 100 * (1 - Math.sqrt((hrs - CFG.holdH) / hrs)) : 100;
+                    const burn = Math.max(burnLin, burnSqrt);
                     if (burn > CFG.maxBurn) return bump('Excessive theta burn');
 
                     const estIvChange = (u.adx > 25 ? 0.025 : -0.01) * sgn;
@@ -971,7 +1053,7 @@ function evaluateSetups() {
                     if (edge < CFG.minEdge) return bump('Edge insufficient vs cost');
                     if (rr < CFG.minRR) return bump('R/R below hurdle');
 
-                    const contractScore = clamp(100 - (o.spread * 4) - (burn * 2) + ((edge - 1) * 20), 20, 98);
+                    const contractScore = clamp(100 - (o.spread * 4) - (30 * burn / CFG.maxBurn) + ((edge - 1) * 20), 20, 98);
                     const final = Math.round(0.5 * tech + 0.5 * contractScore);
                     if (final < st.minScore) return bump('Score below hurdle');
 
@@ -1003,7 +1085,7 @@ function evaluateSetups() {
             chgEl.className = chg >= 0 ? 'up' : 'down';
             document.getElementById(`${id}-rsi`).innerText = u.T.m15.rsi.toFixed(1);
             document.getElementById(`${id}-detail`).innerHTML = `
-                Trend ${H.tf[0]}/${H.tf[1]}/${H.tf[2]}: ADX ${u.adx.toFixed(0)} · ATR ${u.atrPct.toFixed(2)}% · Vol x${u.T.m15.volRatio.toFixed(1)}<br>
+                Trend ${H.tf[0]}/${H.tf[1]}/${H.tf[2]}: ADX ${u.adx.toFixed(0)} 路 ATR ${u.atrPct.toFixed(2)}% 路 Vol x${u.T.m15.volRatio.toFixed(1)}<br>
                 S/R Levels: Sup $${u.T.h1.sup ? u.T.h1.sup.toFixed(0) : '--'} | Res $${u.T.h1.res ? u.T.h1.res.toFixed(0) : '--'} | VWAP $${u.vwap.toFixed(0)}<br>
                 ${status ? `<span class="down"><strong>NO TRADE</strong></span>: ${status}` : `<span class="up"><strong>${dir} SETUP VALID</strong></span>:${cands.length} picks qualified`}
             `;
@@ -1030,7 +1112,7 @@ function renderAutoPicks() {
     tbody.innerHTML = '';
     if (!AppState.autopicks.length) {
         const g = Object.entries(AppState.gates || {}).map(([a, t]) => `${a}: ${t}`).join('   |   ');
-        msg.innerText = g ? `NO TRADE CONDITIONS — ${g}` : 'No setup meets hurdle criteria...';
+        msg.innerText = g ? `NO TRADE CONDITIONS 鈥?${g}` : 'No setup meets hurdle criteria...';
         msg.style.display = 'block';
         return;
     }
@@ -1096,7 +1178,7 @@ function renderAutoPicks() {
             <td>${p.bePct.toFixed(2)}%</td>
             <td>
                 <button class="primary" onclick="addPaperTrade(${idx})">Paper Trade</button>
-                ${!p.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(p.contract)}', '_blank')" title="Binance Chart">📈</button>` : ''}
+                ${!p.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(p.contract)}', '_blank')" title="Binance Chart">馃搱</button>` : ''}
             </td>
         `;
         tbody.appendChild(tr);
@@ -1163,7 +1245,7 @@ function renderOptionChain() {
             ${cell(c)}
             <td style="text-align:center; font-weight:bold; color: ${isPain ? 'var(--yellow)' : (isAtm ? 'var(--yellow)' : 'var(--text-main)')}; border-left:1px solid var(--border); border-right:1px solid var(--border);">
                 ${c ? renderChartIcon(c.symbol, 'Call Chart') : ''}
-                $${strike} ${isPain?'🎯':''}
+                $${strike} ${isPain?'馃幆':''}
                 ${p ? renderChartIcon(p.symbol, 'Put Chart') : ''}
             </td>
             ${cell(p)}
@@ -1291,12 +1373,12 @@ function renderPaperTrades() {
                     <div class="leg-row">
                         <span class="badge badge-call" style="font-size:10px; padding:1px 4px;">BUY</span>
                         <strong>$${t.longLeg.strike}</strong> ${renderChartIcon(t.longLeg.symbol, 'Long Leg Chart')}
-                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.longLeg.entry.toFixed(2)} → Mark: $${lCur}</span>
+                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.longLeg.entry.toFixed(2)} 鈫?Mark: $${lCur}</span>
                     </div>
                     <div class="leg-row">
                         <span class="badge badge-put" style="font-size:10px; padding:1px 4px;">SELL</span>
                         <strong>$${t.shortLeg.strike}</strong> ${renderChartIcon(t.shortLeg.symbol, 'Short Leg Chart')}
-                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.shortLeg.entry.toFixed(2)} → Mark: $${sCur}</span>
+                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.shortLeg.entry.toFixed(2)} 鈫?Mark: $${sCur}</span>
                     </div>
                 </div>
             `;
@@ -1328,7 +1410,7 @@ function renderPaperTrades() {
             <td class="${feeData.grossPnl >= 0 ? 'up' : 'down'}">$${feeData.grossPnl.toFixed(2)}</td>
             <td class="${feeData.netPnl >= 0 ? 'up' : 'down'}" style="font-weight:bold;">$${feeData.netPnl.toFixed(2)}</td>
             <td>
-                ${!t.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(t.contract)}', '_blank')" title="Binance Chart">📈</button>` : ''}
+                ${!t.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(t.contract)}', '_blank')" title="Binance Chart">馃搱</button>` : ''}
                 <button class="primary" onclick="closePaperTrade(${t.id})" style="padding:4px 8px;">Close</button>
                 <button onclick="deletePaperTrade(${t.id})" style="padding:4px 8px;">Delete</button>
             </td>
@@ -1451,9 +1533,8 @@ function applyAssets() {
 
 async function initApp() {
     syncAssets();
-    await seedOptionsData();
-    await fetchSpotData();
-    connectOptionsWebSocket();
+    refreshFeedStatus();
+    connectOptionsWebSocket();     // start streaming right away (no longer queued behind the REST seed)
     connectAltWebSocket();
 
     setInterval(() => {
@@ -1463,6 +1544,20 @@ async function initApp() {
     }, 2000);
 
     setInterval(fetchSpotData, 15000);
+
+    // Once a second: keep the status bar truthful, and recycle a WebSocket that is open but silent.
+    setInterval(() => {
+        const now = Date.now();
+        const silentFor = Feed.wsAt ? now - Feed.wsAt : (Feed.wsOpenedAt ? now - Feed.wsOpenedAt : 0);
+        if (Feed.wsOpen && silentFor > 45000 && wsConnection) { try { wsConnection.close(); } catch (e) {} }
+        refreshFeedStatus();
+    }, 1000);
+
+    // REST fallback: only polls while the WebSocket isn't delivering fresh ticks.
+    setInterval(() => { if (!(Feed.wsAt && Date.now() - Feed.wsAt < 20000)) seedOptionsData(); }, 15000);
+
+    await Promise.all([seedOptionsData(), fetchSpotData()]);
+    evaluateSetups();
 }
 
 initApp();
