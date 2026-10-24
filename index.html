@@ -1,0 +1,2763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Crypto Options Quant Engine v5.2 (4-Pillar: TA · Fundamentals · News · Greeks)</title>
+    <style>
+        :root {
+            --bg-base: #0B0E11;
+            --bg-panel: #181A20;
+            --bg-hover: #2B3139;
+            --border: #2B3139;
+            --text-main: #EAECEF;
+            --text-muted: #848E9C;
+            --green: #0ECB81;
+            --red: #F6465D;
+            --yellow: #F0B90B;
+            --blue: #2962FF;
+            --purple: #9B51E0;
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: var(--font-family); font-size: 13px; overflow-x: hidden; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
+        .header h1 { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        
+        .container { padding: 18px; max-width: 1780px; margin: 0 auto; }
+        
+        .ds-monitor { display: flex; gap: 18px; padding: 10px 20px; background: #121418; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 500; overflow-x: auto; align-items: center; flex-wrap: wrap; }
+        .status-dot { margin-right: 5px; }
+        .live { color: var(--green); } .standby { color: var(--yellow); } .error { color: var(--red); }
+        
+        .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; }
+        .tab { padding: 10px 20px; background: var(--bg-panel); cursor: pointer; color: var(--text-muted); font-weight: 600; border-top-left-radius: 4px; border-top-right-radius: 4px; border: 1px solid transparent; border-bottom: none; white-space: nowrap; }
+        .tab.active { background: var(--bg-hover); color: var(--text-main); border-bottom: 2px solid var(--yellow); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-bottom: 18px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 18px; }
+        .grid-5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 18px; }
+        .card { background: var(--bg-panel); padding: 16px; border-radius: 6px; border: 1px solid var(--border); }
+        .card-header { font-size: 15px; font-weight: 600; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        
+        .auto-exec-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 14px; background: #12151C; border: 1px solid #2A3241; border-radius: 6px; margin-bottom: 12px; font-size: 12px; }
+        .book-pill { background: rgba(41, 98, 255, 0.15); color: #82B1FF; border: 1px solid rgba(41, 98, 255, 0.35); padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .pillar-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .pillar-tag { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; background: #1E2329; border: 1px solid var(--border); }
+
+        .news-ticker-strip { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: #141821; border: 1px solid #262C3A; border-radius: 6px; margin-bottom: 16px; overflow-x: auto; white-space: nowrap; font-size: 12px; }
+        .news-item-card { padding: 12px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+        .news-item-card:hover { border-color: #474D57; }
+
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+        th { color: var(--text-muted); font-weight: 500; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--bg-hover); vertical-align: middle; }
+        tr:hover { background: var(--bg-hover); }
+        
+        .up { color: var(--green); } .down { color: var(--red); } .neutral { color: var(--yellow); }
+        .badge { padding: 3px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; }
+        .badge-call { background: rgba(14, 203, 129, 0.2); color: var(--green); }
+        .badge-put { background: rgba(246, 70, 93, 0.2); color: var(--red); }
+        .badge-spread { background: rgba(41, 98, 255, 0.2); color: #82B1FF; }
+        .badge-strict { background: rgba(14, 203, 129, 0.22); color: #0ECB81; border: 1px solid rgba(14, 203, 129, 0.5); font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: 700; display: inline-block; }
+        .badge-normal { background: rgba(240, 185, 11, 0.18); color: var(--yellow); border: 1px solid rgba(240, 185, 11, 0.4); font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: 700; display: inline-block; }
+        .badge-cloud { background: rgba(14, 203, 129, 0.15); color: var(--green); border: 1px solid rgba(14, 203, 129, 0.35); font-size: 10px; padding: 2px 5px; border-radius: 3px; }
+        .badge-fee { background: rgba(240, 185, 11, 0.15); color: var(--yellow); font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 3px; }
+        
+        button { background: var(--bg-hover); color: var(--text-main); border: 1px solid var(--border); padding: 7px 12px; border-radius: 4px; cursor: pointer; font-weight: 500; transition: 0.2s; font-size: 12px; }
+        button:hover { background: #3b424a; }
+        button.primary { background: var(--yellow); color: #000; border: none; font-weight: 600; }
+        button.primary:hover { background: #e0ac0a; }
+        button.danger { background: var(--red); color: #fff; border: none; font-weight: 600; }
+        button.danger:hover { background: #d9384e; }
+        input, select { background: var(--bg-base); color: var(--text-main); border: 1px solid var(--border); padding: 8px 10px; border-radius: 4px; width: 100%; margin-bottom: 10px; font-size: 13px; }
+
+        .qty-input { width: 72px !important; padding: 5px 6px !important; text-align: center; margin: 0 !important; background: var(--bg-base); color: var(--text-main); border: 1px solid #474D57 !important; border-radius: 4px; font-weight: 600; }
+        .chart-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; cursor: pointer; margin-left: 5px; font-size: 13px; transition: transform 0.15s ease; }
+        .chart-link:hover { transform: scale(1.25); }
+        .chart-btn { padding: 4px 7px; margin-left: 4px; font-size: 11px; vertical-align: middle; }
+        .fee-subtext { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+        .legs-box { display: flex; flex-direction: column; gap: 4px; }
+        .leg-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 1000; justify-content: center; align-items: center; }
+        .modal { background: var(--bg-panel); padding: 20px; border-radius: 6px; border: 1px solid var(--border); width: 760px; max-width: 94%; max-height: 90vh; overflow-y: auto;}
+        .modal-header { font-size: 16px; font-weight: 600; margin-bottom: 14px; display: flex; justify-content: space-between;}
+        .close-btn { cursor: pointer; font-size: 20px; color: var(--text-muted); }
+        .disclaimer { font-size: 11px; color: var(--text-muted); margin-top: 20px; text-align: center; }
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 18px; }
+        .toast-banner { position: fixed; bottom: 18px; right: 18px; background: #1E2329; border-left: 4px solid var(--green); color: var(--text-main); padding: 12px 16px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.6); font-size: 12px; z-index: 2000; display: none; max-width: 440px; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1>
+            BINANCE CRYPTO OPTIONS QUANT ENGINE v5.2
+            <span class="badge" style="background:#2962FF; color:#fff;">4-PILLAR: CHART TA · FUNDAMENTALS · NEWS · GREEKS</span>
+            <span class="badge-cloud" id="cloud-mode-pill">AUTO-EXEC & AUTO-CLOSE READY</span>
+        </h1>
+        <div class="header-actions">
+            <span id="fng-header-badge" class="book-pill">Fear & Greed: Syncing...</span>
+            <span id="auto-session-stats" class="badge-fee" style="padding:5px 8px; font-size:11px;">Auto-Opened: 0 | Auto-Closed: 0</span>
+            <button onclick="manualCloudTick()" id="btn-cloud-tick" title="Force Refresh All Feeds & Cloud Sync" style="padding: 5px 10px; font-size: 11px;">⚡ Sync All Feeds</button>
+            <span id="last-update" style="color: var(--text-muted); font-size: 12px;">Booting engine...</span>
+        </div>
+    </header>
+
+    <div class="ds-monitor">
+        <div><span id="ds-opt-dot" class="status-dot standby">🟡</span>OPTIONS EAPI/WS: <span id="ds-opt-text" class="standby">SEEDING</span></div>
+        <div><span id="ds-spot-dot" class="status-dot standby">🟡</span>SPOT TA: <span id="ds-spot-text" class="standby">CONNECTING</span></div>
+        <div><span id="ds-fund-dot" class="status-dot standby">🟡</span>FUTURES FUNDAMENTALS: <span id="ds-fund-text" class="standby">SYNCING</span></div>
+        <div><span id="ds-news-dot" class="status-dot standby">🟡</span>MARKET NEWS NLP: <span id="ds-news-text" class="standby">FETCHING</span></div>
+        <div><span id="ds-cloud-dot" class="status-dot live">🟢</span>ENGINE: <span id="ds-cloud-text" class="live">LOCAL AUTO ACTIVE</span></div>
+        <div style="margin-left:auto;"><span id="app-status" class="standby">Initializing snapshot...</span></div>
+    </div>
+
+    <div class="container">
+        <!-- LIVE NEWS & FUNDAMENTAL REGIME BAR -->
+        <div class="news-ticker-strip" id="live-news-strip">
+            <span class="badge badge-spread">📰 LIVE MARKET NEWS & MACRO</span>
+            <span id="news-strip-text" style="color:var(--text-muted);">Fetching real-time crypto headlines, Binance Perpetual funding rates, and institutional flow...</span>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard')">Dashboard & Auto-Picks</div>
+            <div class="tab" data-tab="tab-intel" onclick="switchTab('tab-intel')">Market News & Fundamentals (<span id="tab-news-count">0</span>)</div>
+            <div class="tab" data-tab="tab-chain" onclick="switchTab('tab-chain')">Option Chain & Pain</div>
+            <div class="tab" data-tab="tab-paper" onclick="switchTab('tab-paper')">Paper Trading (<span id="tab-open-count">0</span>)</div>
+            <div class="tab" data-tab="tab-settings" onclick="switchTab('tab-settings')">Settings & Cloud 24/7</div>
+        </div>
+
+        <!-- TAB: DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="grid-2" id="market-cards-container"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        AUTO PICKS — 4-PILLAR INTRADAY QUANT QUALIFIER (Chart Trend + TA + Fundamentals + News + Greeks)
+                        <span class="book-pill" style="margin-left:6px;">McMillan · Natenberg · Spina</span>
+                    </div>
+                    <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                        <select id="trade-mode" onchange="setTradeMode(this.value)" style="width:auto;margin:0;padding:4px 8px;" title="Execution Structure">
+                            <option value="naked">Single Leg Outright (McMillan Γ/Θ + Natenberg IV/RV)</option>
+                            <option value="spread">Vertical Debit Spread (Theta & Vega Hedged)</option>
+                            <option value="both">Both (Single Leg + Vertical Debit Spread)</option>
+                        </select>
+                        <select id="horizon-quick" onchange="setHorizon(this.value)" style="width:auto;margin:0;padding:4px 8px;" title="Holding Horizon"></select>
+                        <select id="gate-quick" onchange="setGate(this.value)" style="width:auto;margin:0;padding:4px 8px;" title="Gate Sensitivity"></select>
+                        <span class="badge-fee">Fee (0.02% / 10% Cap) + Slippage Deducted</span>
+                    </span>
+                </div>
+
+                <!-- AUTO-EXECUTION & AUTO-CLOSE BAR -->
+                <div class="auto-exec-bar">
+                    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--green);">
+                            <input type="checkbox" id="quick-autopick" style="width:auto; margin:0;" onchange="toggleQuickAutoPick(this.checked)">
+                            ⚡ Auto-Add Qualified Strikes to Paper Trading
+                        </label>
+                        <select id="auto-exec-tier" onchange="setAutoExecTier(this.value)" style="width:auto; margin:0; padding:4px 8px; font-size:12px;">
+                            <option value="active_gate">Auto-Add Rule: All Qualified (Strict & Normal) Strikes</option>
+                            <option value="strict_only">Auto-Add Rule: STRICT Qualified Strikes Only</option>
+                        </select>
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--yellow);">
+                            <input type="checkbox" id="quick-autoclose" style="width:auto; margin:0;" onchange="toggleQuickAutoClose(this.checked)">
+                            🎯 Auto-Close on Stop Loss / Target 1 / Target 2
+                        </label>
+                        <select id="autoclose-mode" onchange="setAutoCloseMode(this.value)" style="width:auto; margin:0; padding:4px 8px; font-size:12px;">
+                            <option value="t1_or_t2">Exit Rule: Auto-Close 100% on SL, Target 1, or Target 2</option>
+                            <option value="t1_lock_t2">Exit Rule: Lock Floor at T1 → Auto-Close at T2 or SL</option>
+                            <option value="t1_split_t2">Exit Rule: Auto-Close 50% at T1 & 50% at T2 or SL</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span id="cooldown-indicator" style="color:var(--text-muted); font-size:11px;">Cooldowns: 0</span>
+                        <button onclick="clearCooldowns()" style="padding:3px 8px; font-size:11px;" title="Reset re-entry cooldown timers">Reset Cooldowns</button>
+                    </div>
+                </div>
+
+                <div id="hz-info" style="font-size:11px;color:var(--text-muted);margin:0 0 10px; line-height:1.5;"></div>
+
+                <div class="table-container">
+                    <table id="autopicks-table">
+                        <thead>
+                            <tr>
+                                <th>Tier & Structure</th>
+                                <th>Asset</th>
+                                <th>Contract / Legs</th>
+                                <th>Strike(s) & Charts</th>
+                                <th>4-Pillar Alignment (TA / Fund / News)</th>
+                                <th>Expiry</th>
+                                <th>Mark Cost</th>
+                                <th>Net Delta</th>
+                                <th>Theta & Γ/Θ Eff.</th>
+                                <th>IV & Natenberg IV/RV</th>
+                                <th>Spread / Depth</th>
+                                <th>Quant Score</th>
+                                <th>Target 1 / 2</th>
+                                <th>Stop Loss</th>
+                                <th>Net R/R</th>
+                                <th>Break-even</th>
+                                <th>Auto-Trade Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="autopicks-body"></tbody>
+                    </table>
+                    <div id="no-picks-msg" style="padding: 20px; text-align: center; color: var(--text-muted);">Syncing option chains, derivatives fundamentals, and market news...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: MARKET NEWS & FUNDAMENTALS -->
+        <div id="tab-intel" class="tab-content">
+            <div class="grid-4" id="fundamentals-cards-container"></div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        📰 Live Crypto Market News & NLP Sentiment Engine
+                        <span class="fee-subtext" style="display:inline; margin-left:8px;">Scans headlines for asset tags & bullish/bearish macro catalysts every 60s</span>
+                    </div>
+                    <button onclick="fetchNewsAndMacro(true)" style="padding:4px 10px;">🔄 Refresh News Now</button>
+                </div>
+                <div id="news-feed-container">
+                    <div style="padding:20px; text-align:center; color:var(--text-muted);">Loading live crypto news headlines...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: OPTION CHAIN -->
+        <div id="tab-chain" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    Live Binance Option Chain & Max Pain
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span id="max-pain-metric" style="font-size:12px; color:var(--yellow); font-weight:bold;">Max Pain: Calc...</span>
+                        <select id="chain-asset-select" style="width: 120px; margin: 0;">
+                            <option value="BTC">BTC</option>
+                            <option value="ETH">ETH</option>
+                            <option value="BNB">BNB</option>
+                            <option value="SOL">SOL</option>
+                            <option value="XRP">XRP</option>
+                            <option value="DOGE">DOGE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="chain-table">
+                        <thead>
+                            <tr>
+                                <th colspan="6" style="text-align:center; border-right:1px solid var(--border)">CALLS</th>
+                                <th style="text-align:center;">STRIKE</th>
+                                <th colspan="6" style="text-align:center; border-left:1px solid var(--border)">PUTS</th>
+                            </tr>
+                            <tr>
+                                <th>Bid</th><th>Ask</th><th>Mark</th><th>IV</th><th>Delta</th><th style="border-right:1px solid var(--border)">OI</th>
+                                <th style="text-align:center; color:#fff;">Strike</th>
+                                <th style="border-left:1px solid var(--border)">Bid</th><th>Ask</th><th>Mark</th><th>IV</th><th>Delta</th><th>OI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="chain-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: PAPER TRADING -->
+        <div id="tab-paper" class="tab-content">
+            <div class="grid-5">
+                <div class="card">
+                    <div class="card-header" style="border:none; margin:0; padding:0; font-size:12px; color:var(--text-muted);">Total Net P&L (All)</div>
+                    <div id="pt-total-pnl" style="font-size:22px; font-weight:bold; margin-top:8px;">$0.00</div>
+                    <span class="fee-subtext">After all round-trip fees</span>
+                </div>
+                <div class="card">
+                    <div class="card-header" style="border:none; margin:0; padding:0; font-size:12px; color:var(--text-muted);">Open Net P&L</div>
+                    <div id="pt-open-pnl" style="font-size:22px; font-weight:bold; margin-top:8px;">$0.00</div>
+                    <span class="fee-subtext">Consistent mark-to-market basis</span>
+                </div>
+                <div class="card">
+                    <div class="card-header" style="border:none; margin:0; padding:0; font-size:12px; color:var(--text-muted);">Closed Realized P&L</div>
+                    <div id="pt-realized-pnl" style="font-size:22px; font-weight:bold; margin-top:8px;">$0.00</div>
+                    <span class="fee-subtext">Net after round-trip fees</span>
+                </div>
+                <div class="card">
+                    <div class="card-header" style="border:none; margin:0; padding:0; font-size:12px; color:var(--text-muted);">Total Fees Paid / Est.</div>
+                    <div id="pt-total-fees" style="font-size:22px; font-weight:bold; margin-top:8px; color:var(--yellow);">$0.00</div>
+                    <span class="fee-subtext">Binance Options exchange fee</span>
+                </div>
+                <div class="card">
+                    <div class="card-header" style="border:none; margin:0; padding:0; font-size:12px; color:var(--text-muted);">Win Rate (Closed)</div>
+                    <div id="pt-winrate" style="font-size:22px; font-weight:bold; margin-top:8px;">0%</div>
+                    <div id="pt-total-trades" style="font-size:11px; color:var(--text-muted); margin-top:2px;">0 trades</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">
+                    Open Paper Positions (Real-Time Auto-Close Monitoring on SL / T1 / T2)
+                    <span class="fee-subtext">Auto-Monitors Live Option Mark Stream · Shows Qualification Tier (STRICT / NORMAL) & Closes on SL, T1, T2, or Time-Stop</span>
+                </div>
+                <div class="table-container">
+                    <table id="paper-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Tier, Structure & Source</th>
+                                <th>Asset</th>
+                                <th>Contract Name</th>
+                                <th style="min-width: 240px;">Strike(s) & Dual Leg Breakdown</th>
+                                <th>Entry Cost (Mark)</th>
+                                <th>Current Value</th>
+                                <th style="text-align:center;">Qty</th>
+                                <th>Round-Trip Fee</th>
+                                <th>Target 1 / 2</th>
+                                <th>Stop Loss</th>
+                                <th>Gross P&L</th>
+                                <th>Net Unrealized P&L</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paper-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        Closed Position History (<span id="closed-history-count">0</span>)
+                        <span class="fee-subtext">Completed trades with STRICT / NORMAL qualification tags & actual deducted Binance fees</span>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button class="danger" onclick="clearClosedHistory()" title="Clear all closed positions from history (keeps open positions intact)">🗑️ Clear All Closed Positions</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Closed Time</th>
+                                <th>Tier, Structure & Source</th>
+                                <th>Asset</th>
+                                <th>Contract Name</th>
+                                <th style="min-width: 240px;">Strike(s) & Dual Leg Breakdown</th>
+                                <th>Entry</th>
+                                <th>Exit</th>
+                                <th>Qty</th>
+                                <th>Total Fee</th>
+                                <th>Gross Return</th>
+                                <th>Net Realized P&L</th>
+                                <th>Trigger</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                    <div id="no-history-msg" style="padding: 15px; text-align: center; color: var(--text-muted); font-size: 12px;">No closed trades yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: SETTINGS -->
+        <div id="tab-settings" class="tab-content">
+            <div class="settings-grid">
+                <div class="card">
+                    <div class="card-header">4-Pillar Risk, News, Fundamental & Fee Settings</div>
+                    
+                    <label>Binance Option Fee Rate (% of Underlying Price)</label>
+                    <input type="number" id="set-fee-rate" step="0.001" value="0.02">
+
+                    <label>Max Fee Cap (% of Option Premium)</label>
+                    <input type="number" id="set-fee-cap" step="0.1" value="10">
+
+                    <label>Minimum Composite Setup Score (0-100)</label>
+                    <input type="number" id="set-min-score" value="65">
+                    
+                    <label>Maximum Allowed Bid-Ask Spread (% — BTC/ETH Base; Altcoins +6% Adaptive)</label>
+                    <input type="number" id="set-max-spread" value="16">
+
+                    <label>Minimum Top of Book Depth (Contracts)</label>
+                    <input type="number" id="set-min-depth" step="0.01" value="0.05">
+                    
+                    <label>Holding Horizon</label>
+                    <select id="set-horizon"></select>
+
+                    <label>Altcoin Options</label>
+                    <div id="set-alts" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;"></div>
+
+                    <label>Gate Sensitivity</label>
+                    <select id="set-gate"></select>
+
+                    <label>Delta Targeting Mode (McMillan Strike Selection)</label>
+                    <select id="set-strategy">
+                        <option value="conservative">Conservative (In/Near ATM, Delta ~0.55)</option>
+                        <option value="balanced" selected>Balanced (ATM/Slight OTM, Delta ~0.48)</option>
+                        <option value="aggressive">Aggressive (OTM Momentum, Delta ~0.38)</option>
+                    </select>
+
+                    <div style="display:flex; gap:18px; margin-top:8px; padding:10px; background:var(--bg-base); border:1px solid var(--border); border-radius:4px; flex-wrap:wrap;">
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:#82B1FF;">
+                            <input type="checkbox" id="set-use-fund" style="width:auto; margin:0;" checked> Enforce Crypto Derivatives Fundamentals Gate
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--yellow);">
+                            <input type="checkbox" id="set-use-news" style="width:auto; margin:0;" checked> Enforce Market News Sentiment Veto Gate
+                        </label>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        Auto-Execution & 24/7 Cloud Automation (Supabase + Cloudflare Worker)
+                        <span class="badge-cloud" id="settings-cloud-badge">ACTIVE</span>
+                    </div>
+
+                    <label>Supabase Project URL</label>
+                    <input type="text" id="set-sb-url" placeholder="https://xyzcompany.supabase.co">
+
+                    <label>Supabase Anon Public Key</label>
+                    <input type="password" id="set-sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6...">
+
+                    <label>Cloudflare Worker URL (Optional)</label>
+                    <input type="text" id="set-worker-url" placeholder="https://crypto-options-bot.yourname.workers.dev">
+
+                    <div style="display:flex; gap:20px; margin: 12px 0 16px; padding: 10px; background: var(--bg-base); border-radius: 4px; border: 1px solid var(--border); flex-wrap: wrap;">
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--green);">
+                            <input type="checkbox" id="set-autopick" style="width:auto; margin:0;" checked> Enable Auto-Pick to Paper Trade
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--yellow);">
+                            <input type="checkbox" id="set-autoclose" style="width:auto; margin:0;" checked> Enable Auto-Close (SL / T1 / T2)
+                        </label>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div>
+                            <label>Max Total Open Trades</label>
+                            <input type="number" id="set-max-open" value="20" min="1" max="100">
+                        </div>
+                        <div>
+                            <label>Max Trades Per Asset</label>
+                            <input type="number" id="set-max-asset" value="6" min="1" max="30">
+                        </div>
+                        <div>
+                            <label>Stop-Loss Cooldown (Hours)</label>
+                            <input type="number" id="set-cooldown-hrs" value="1" min="0" max="48" step="0.25">
+                        </div>
+                        <div>
+                            <label>Pre-Expiry Auto-Close (Hours)</label>
+                            <input type="number" id="set-expiry-cutoff" value="1.5" min="0.25" max="24" step="0.25">
+                        </div>
+                    </div>
+
+                    <label>Anti-Wick Stop Loss Confirmations (Consecutive 2s Checks)</label>
+                    <input type="number" id="set-anti-wick" value="2" min="1" max="6">
+
+                    <div id="cloud-last-run-box" style="padding:10px; background:var(--bg-base); border:1px solid var(--border); border-radius:4px; font-size:11px; color:var(--text-muted); margin-bottom:14px;">
+                        Local Auto-Pick & Auto-Close Engine is active in this browser tab. Optional Supabase Cloud sync ready.
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="primary" onclick="saveSettings()">Save & Sync All Settings</button>
+                        <button onclick="manualCloudTick()">⚡ Test Cloud Connection</button>
+                        <button class="danger" style="margin-left:auto;" onclick="clearData()">Reset Local & Cloud Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            <strong>QUANT ENGINE v5.2 NOTICE:</strong> Combines Multi-Timeframe Chart Technicals (5-Bar Structural Fractal Pivots + ADX Breakout Override), Binance USDⓈ-M Perpetual Derivatives Fundamentals, Live NLP News Sentiment, and McMillan / Natenberg / Spina Option Greeks.
+        </div>
+    </div>
+
+    <!-- Explanation Modal -->
+    <div class="modal-overlay" id="why-modal">
+        <div class="modal">
+            <div class="modal-header">
+                Why Selected? (4-Pillar Quantitative Scorecard)
+                <span class="close-btn" onclick="document.getElementById('why-modal').style.display='none'">&times;</span>
+            </div>
+            <div id="why-content" style="font-size: 13px; line-height: 1.6;"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-banner" id="toast-banner"></div>
+
+<script>
+/* =========================================================
+   1. CONSTANTS, UTILITIES & SCHEMA MIGRATION (v5.2)
+========================================================= */
+function getBinanceOptionUrl(contract) {
+    if (!contract) return 'https://www.binance.com/en/eoptions';
+    const asset = contract.split('-')[0] || 'BTC';
+    return `https://www.binance.com/en/eoptions/${asset}USDT/${contract}`;
+}
+
+function renderChartIcon(contract, title = 'Open Binance Chart') {
+    if (!contract) return '';
+    return `<a class="chart-link" href="${getBinanceOptionUrl(contract)}" target="_blank" title="${title}">📈</a>`;
+}
+
+function showToast(msg, isProfit = true) {
+    const el = document.getElementById('toast-banner');
+    if (!el) return;
+    el.style.borderLeftColor = isProfit ? 'var(--green)' : 'var(--yellow)';
+    el.innerHTML = msg;
+    el.style.display = 'block';
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.style.display = 'none'; }, 5500);
+}
+
+// Helper for dynamic price formatting (handles $90,000 BTC as well as $1.28 XRP and $0.0815 DOGE)
+function fmtSpot(p) {
+    if (!p && p !== 0) return '--';
+    const n = Number(p);
+    if (n >= 100) return n.toFixed(2);
+    if (n >= 1) return n.toFixed(3);
+    return n.toFixed(4);
+}
+
+function resolveTradeTier(t) {
+    if (t.tier === 'STRICT' || t.tier === 'NORMAL') return t.tier;
+    if (t.source && t.source.toUpperCase().includes('STRICT')) return 'STRICT';
+    if (t.source && t.source.toUpperCase().includes('NORMAL')) return 'NORMAL';
+    if (typeof t.scoreAtEntry === 'number') return t.scoreAtEntry >= 72 ? 'STRICT' : 'NORMAL';
+    return (AppState.settings.gate || 'normal').toUpperCase() === 'STRICT' ? 'STRICT' : 'NORMAL';
+}
+
+function renderTierBadge(tierStr) {
+    const isStrict = (tierStr || '').toUpperCase() === 'STRICT';
+    return isStrict
+        ? `<span class="badge-strict" title="Qualified under Strict 4-Pillar Hurdles">STRICT</span>`
+        : `<span class="badge-normal" title="Qualified under Normal 4-Pillar Hurdles">NORMAL</span>`;
+}
+
+const ALL = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE'];
+const ALT = ALL.slice(2);
+const NAMES = { BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP', DOGE: 'Dogecoin' };
+const ACTIVE = () => ['BTC', 'ETH', ...ALT.filter(a => (AppState.settings.alts || ALT).includes(a))];
+
+const defaultSettings = {
+    engineVersion: 52,
+    minScore: 65,
+    maxSpread: 16,
+    minDepth: 0.05,
+    strategy: 'balanced',
+    tradeMode: 'both',
+    feeRatePercent: 0.02,
+    feeCapPercent: 10,
+    horizon: 'intraday',
+    gate: 'normal',
+    alts: ['SOL', 'BNB', 'XRP', 'DOGE'],
+    useFundamentalsGate: true,
+    useNewsGate: true,
+    autoPickEnabled: true,
+    autoCloseEnabled: true,
+    autoExecTier: 'active_gate',
+    autoCloseMode: 't1_split_t2',
+    maxOpenTrades: 20,
+    maxPerAsset: 6,
+    cooldownHours: 1,
+    expiryCutoffHours: 1.5,
+    antiWickConfirmations: 2
+};
+
+let rawSavedSettings = null;
+try { rawSavedSettings = JSON.parse(localStorage.getItem('appSettings')); } catch (e) {}
+if (!rawSavedSettings || rawSavedSettings.engineVersion !== 52) {
+    rawSavedSettings = {
+        ...defaultSettings,
+        ...(rawSavedSettings || {}),
+        engineVersion: 52,
+        horizon: 'intraday',
+        maxSpread: Math.max(16, (rawSavedSettings && rawSavedSettings.maxSpread) || 16),
+        autoExecTier: 'active_gate',
+        autoPickEnabled: true,
+        autoCloseEnabled: true
+    };
+    localStorage.setItem('appSettings', JSON.stringify(rawSavedSettings));
+}
+
+const AppState = {
+    settings: rawSavedSettings,
+    paperTrades: JSON.parse(localStorage.getItem('paperTrades')) || [],
+    tradeHistory: JSON.parse(localStorage.getItem('tradeHistory')) || [],
+    cooldowns: JSON.parse(localStorage.getItem('tradeCooldowns')) || {},
+    historyClearedAt: parseInt(localStorage.getItem('historyClearedAt') || '0', 10),
+    sessionStats: { opened: 0, closed: 0 },
+    market: Object.fromEntries(ALL.map(a => [a, { price: 0, change: 0, klines: [] }])),
+    options: Object.fromEntries(ALL.map(a => [a, []])),
+    ta: Object.fromEntries(ALL.map(a => [a, {}])),
+    fundamentals: Object.fromEntries(ALL.map(a => [a, {
+        fundingRate: 0,
+        basisPct: 0,
+        openInterestUsd: 0,
+        topTraderLsRatio: 1.0,
+        takerBuySellRatio: 1.0,
+        bullScore: 50,
+        summary: 'Syncing...',
+        ready: false
+    }])),
+    news: {
+        items: [],
+        fngValue: 50,
+        fngLabel: 'Neutral',
+        globalScore: 50,
+        assetScores: Object.fromEntries(ALL.map(a => [a, { score: 50, bullCount: 0, bearCount: 0, latestHeadline: 'No major asset-specific catalyst' }])),
+        lastUpdated: 0
+    },
+    autopicks: [],
+    gates: {}
+};
+
+const liveOptionStore = {};
+
+function populateSettingsInputs() {
+    document.getElementById('set-min-score').value = AppState.settings.minScore ?? 65;
+    document.getElementById('set-max-spread').value = AppState.settings.maxSpread ?? 16;
+    document.getElementById('set-min-depth').value = AppState.settings.minDepth || 0.05;
+    document.getElementById('set-strategy').value = AppState.settings.strategy || 'balanced';
+    document.getElementById('set-fee-rate').value = AppState.settings.feeRatePercent ?? 0.02;
+    document.getElementById('set-fee-cap').value = AppState.settings.feeCapPercent ?? 10;
+    document.getElementById('trade-mode').value = AppState.settings.tradeMode || 'both';
+    document.getElementById('set-use-fund').checked = AppState.settings.useFundamentalsGate !== false;
+    document.getElementById('set-use-news').checked = AppState.settings.useNewsGate !== false;
+    document.getElementById('set-autopick').checked = AppState.settings.autoPickEnabled !== false;
+    document.getElementById('set-autoclose').checked = AppState.settings.autoCloseEnabled !== false;
+    document.getElementById('quick-autopick').checked = AppState.settings.autoPickEnabled !== false;
+    document.getElementById('quick-autoclose').checked = AppState.settings.autoCloseEnabled !== false;
+    document.getElementById('auto-exec-tier').value = AppState.settings.autoExecTier || 'active_gate';
+    document.getElementById('autoclose-mode').value = AppState.settings.autoCloseMode || 't1_split_t2';
+    document.getElementById('set-max-open').value = AppState.settings.maxOpenTrades ?? 20;
+    document.getElementById('set-max-asset').value = AppState.settings.maxPerAsset ?? 6;
+    document.getElementById('set-cooldown-hrs').value = AppState.settings.cooldownHours ?? 1;
+    document.getElementById('set-expiry-cutoff').value = AppState.settings.expiryCutoffHours ?? 1.5;
+    document.getElementById('set-anti-wick').value = AppState.settings.antiWickConfirmations ?? 2;
+}
+populateSettingsInputs();
+
+function toggleQuickAutoPick(checked) {
+    AppState.settings.autoPickEnabled = checked;
+    document.getElementById('set-autopick').checked = checked;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+function toggleQuickAutoClose(checked) {
+    AppState.settings.autoCloseEnabled = checked;
+    document.getElementById('set-autoclose').checked = checked;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+function setAutoExecTier(v) {
+    AppState.settings.autoExecTier = v;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+function setAutoCloseMode(v) {
+    AppState.settings.autoCloseMode = v;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+function clearCooldowns() {
+    AppState.cooldowns = {};
+    localStorage.setItem('tradeCooldowns', '{}');
+    showToast('🔄 All strike & asset re-entry cooldown timers cleared.');
+    evaluateSetups();
+}
+
+function setTradeMode(v) {
+    AppState.settings.tradeMode = v;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+function saveSettings() {
+    CloudConfig.url = document.getElementById('set-sb-url').value.trim().replace(/\/$/, '');
+    CloudConfig.key = document.getElementById('set-sb-key').value.trim();
+    CloudConfig.workerUrl = document.getElementById('set-worker-url').value.trim().replace(/\/$/, '');
+    localStorage.setItem('sbUrl', CloudConfig.url);
+    localStorage.setItem('sbKey', CloudConfig.key);
+    localStorage.setItem('cfWorkerUrl', CloudConfig.workerUrl);
+
+    AppState.settings.minScore = parseInt(document.getElementById('set-min-score').value) || 65;
+    AppState.settings.maxSpread = parseFloat(document.getElementById('set-max-spread').value) || 16;
+    AppState.settings.minDepth = parseFloat(document.getElementById('set-min-depth').value) || 0.05;
+    AppState.settings.strategy = document.getElementById('set-strategy').value;
+    AppState.settings.feeRatePercent = parseFloat(document.getElementById('set-fee-rate').value) ?? 0.02;
+    AppState.settings.feeCapPercent = parseFloat(document.getElementById('set-fee-cap').value) ?? 10;
+    AppState.settings.useFundamentalsGate = document.getElementById('set-use-fund').checked;
+    AppState.settings.useNewsGate = document.getElementById('set-use-news').checked;
+
+    AppState.settings.autoPickEnabled = document.getElementById('set-autopick').checked;
+    AppState.settings.autoCloseEnabled = document.getElementById('set-autoclose').checked;
+    document.getElementById('quick-autopick').checked = AppState.settings.autoPickEnabled;
+    document.getElementById('quick-autoclose').checked = AppState.settings.autoCloseEnabled;
+
+    AppState.settings.maxOpenTrades = parseInt(document.getElementById('set-max-open').value) || 20;
+    AppState.settings.maxPerAsset = parseInt(document.getElementById('set-max-asset').value) || 6;
+    AppState.settings.cooldownHours = parseFloat(document.getElementById('set-cooldown-hrs').value) ?? 1;
+    AppState.settings.expiryCutoffHours = parseFloat(document.getElementById('set-expiry-cutoff').value) ?? 1.5;
+    AppState.settings.antiWickConfirmations = parseInt(document.getElementById('set-anti-wick').value) || 2;
+
+    const hzNew = document.getElementById('set-horizon').value;
+    const hzChanged = hzNew !== AppState.settings.horizon;
+    AppState.settings.horizon = hzNew;
+    AppState.settings.gate = document.getElementById('set-gate').value;
+    document.getElementById('gate-quick').value = AppState.settings.gate;
+    AppState.settings.alts = [...document.querySelectorAll('#set-alts input:checked')].map(i => i.value);
+    applyAssets();
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    pushCloudState({ settings: AppState.settings });
+    showToast('✅ Settings saved locally and synced to Cloud.');
+    if (hzChanged) setHorizon(hzNew); else evaluateSetups();
+}
+
+async function clearClosedHistory() {
+    if (!AppState.tradeHistory.length) {
+        showToast('ℹ️ Closed Position History is already empty.', false);
+        return;
+    }
+    if (confirm(`Clear all ${AppState.tradeHistory.length} closed position(s) from history? (Your open positions will not be affected)`)) {
+        AppState.tradeHistory = [];
+        AppState.historyClearedAt = Date.now();
+        localStorage.setItem('tradeHistory', '[]');
+        localStorage.setItem('historyClearedAt', String(AppState.historyClearedAt));
+        await pushCloudState({ trade_history: [] });
+        renderPaperTrades();
+        showToast('🗑️ All closed positions cleared from history.');
+    }
+}
+
+async function deleteClosedHistoryItem(idxFromEnd) {
+    const actualIdx = AppState.tradeHistory.length - 1 - idxFromEnd;
+    if (actualIdx >= 0 && actualIdx < AppState.tradeHistory.length) {
+        AppState.tradeHistory.splice(actualIdx, 1);
+        AppState.historyClearedAt = Date.now();
+        localStorage.setItem('tradeHistory', JSON.stringify(AppState.tradeHistory));
+        localStorage.setItem('historyClearedAt', String(AppState.historyClearedAt));
+        await pushCloudState({ trade_history: AppState.tradeHistory });
+        renderPaperTrades();
+    }
+}
+
+async function clearData() {
+    if (confirm('Clear all open paper trades, closed trade history, and cooldowns?')) {
+        AppState.paperTrades = [];
+        AppState.tradeHistory = [];
+        AppState.cooldowns = {};
+        AppState.historyClearedAt = Date.now();
+        localStorage.setItem('paperTrades', '[]');
+        localStorage.setItem('tradeHistory', '[]');
+        localStorage.setItem('tradeCooldowns', '{}');
+        localStorage.setItem('historyClearedAt', String(AppState.historyClearedAt));
+        await pushCloudState({ paper_trades: [], trade_history: [] });
+        renderPaperTrades();
+        showToast('🗑️ Reset all open & closed paper trading data.');
+    }
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+}
+
+const Feed = { t0: Date.now(), restAt: 0, restErr: '', wsAt: 0, wsOpen: false, wsOpenedAt: 0, altAt: 0, altOpen: false };
+const ago = t => { const sec = Math.max(0, Math.round((Date.now() - t) / 1000)); return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m`; };
+
+function updateSourceStatus(source, status, detail) {
+    const elText = document.getElementById(`ds-${source}-text`);
+    const elDot = document.getElementById(`ds-${source}-dot`);
+    if (!elText || !elDot) return;
+    const k = status.toLowerCase();
+    const cls = k.includes('live') || k.includes('active') ? 'live' : (k.includes('error') ? 'error' : 'standby');
+    elText.innerText = status;
+    elText.className = cls;
+    elText.title = detail || '';
+    elDot.className = `status-dot ${cls}`;
+    elDot.innerText = cls === 'live' ? '🟢' : (cls === 'error' ? '🔴' : '🟡');
+}
+
+function refreshFeedStatus() {
+    const now = Date.now();
+    const total = Object.keys(liveOptionStore).length;
+    const wsFresh = Feed.wsAt && now - Feed.wsAt < 20000;
+    const restFresh = Feed.restAt && now - Feed.restAt < 45000 && total > 0;
+    let status, msg;
+    if (wsFresh) {
+        status = 'LIVE';
+        msg = `Live · WebSocket streaming · ${total.toLocaleString()} contracts · last tick ${ago(Feed.wsAt)} ago`;
+    } else if (restFresh) {
+        status = 'LIVE';
+        msg = `Live · REST polling · ${total.toLocaleString()} contracts · updated ${ago(Feed.restAt)} ago`;
+    } else if (total > 0 && (Feed.wsAt || Feed.restAt)) {
+        status = 'STALE';
+        msg = `Options data stale · last update ${ago(Math.max(Feed.wsAt, Feed.restAt))} ago · reconnecting…`;
+    } else if (now - Feed.t0 > 25000) {
+        status = 'ERROR';
+        msg = `Cannot reach Binance options feed${Feed.restErr ? ' (' + Feed.restErr + ')' : ''} · retrying…`;
+    } else {
+        status = 'SEEDING';
+        msg = 'Initializing snapshot…';
+    }
+    updateSourceStatus('opt', status, msg);
+    const appEl = document.getElementById('app-status');
+    if (appEl) {
+        appEl.innerText = msg;
+        appEl.className = status === 'LIVE' ? 'live' : (status === 'ERROR' ? 'error' : 'standby');
+    }
+}
+
+/* =========================================================
+   2. BINANCE OPTIONS FEE MODEL (JULIA SPINA FRICTION MODEL)
+========================================================= */
+function calculateSingleLegFee(underlyingPrice, optionPrice, qty = 1) {
+    const feeRate = (AppState.settings.feeRatePercent || 0.02) / 100;
+    const capRate = (AppState.settings.feeCapPercent || 10) / 100;
+    const rawFee = underlyingPrice * feeRate * qty;
+    const feeCap = optionPrice * capRate * qty;
+    return Math.max(0.0001, Math.min(rawFee, feeCap));
+}
+
+function computeTradeFees(trade, currentPrice, currentUnderlying) {
+    const qty = typeof trade.qty === 'number' ? trade.qty : 1;
+    const entryUnderlying = trade.underlyingAtEntry || currentUnderlying;
+    let entryFee = 0, exitFee = 0;
+
+    if (trade.isSpread) {
+        entryFee = calculateSingleLegFee(entryUnderlying, trade.longLeg.entry, qty) + 
+                   calculateSingleLegFee(entryUnderlying, trade.shortLeg.entry, qty);
+        exitFee = calculateSingleLegFee(currentUnderlying, trade.longLeg.current || trade.longLeg.entry, qty) + 
+                  calculateSingleLegFee(currentUnderlying, trade.shortLeg.current || trade.shortLeg.entry, qty);
+    } else {
+        entryFee = calculateSingleLegFee(entryUnderlying, trade.entry, qty);
+        exitFee = calculateSingleLegFee(currentUnderlying, currentPrice, qty);
+    }
+
+    const totalFee = entryFee + exitFee;
+    const grossPnl = (currentPrice - trade.entry) * qty;
+    const netPnl = grossPnl - totalFee;
+    return { entryFee, exitFee, totalFee, grossPnl, netPnl };
+}
+
+/* =========================================================
+   3. PILLAR 3 & 4: CRYPTO FUNDAMENTALS & MARKET NEWS NLP
+========================================================= */
+const BULL_WORDS = [
+    'surge', 'surges', 'rally', 'rallies', 'soar', 'breakout', 'bullish', 'inflow', 'inflows',
+    'approval', 'approved', 'adopt', 'adoption', 'partnership', 'accumulate', 'accumulation',
+    'institutional', 'record high', 'ath', 'upgrade', 'buyback', 'launch', 'etf inflow', 'rate cut', 'dovish'
+];
+const BEAR_WORDS = [
+    'hack', 'hacked', 'exploit', 'ban', 'banned', 'lawsuit', 'sued', 'sec charges', 'crackdown',
+    'outflow', 'outflows', 'crash', 'plunge', 'plunges', 'dump', 'bearish', 'liquidation',
+    'liquidations', 'bankrupt', 'bankruptcy', 'insolvency', 'delist', 'investigation', 'hawkish', 'tariff', 'delay'
+];
+const ASSET_KEYWORDS = {
+    BTC: ['btc', 'bitcoin'],
+    ETH: ['eth', 'ethereum', 'ether'],
+    BNB: ['bnb', 'binance coin', 'bnb chain'],
+    SOL: ['sol', 'solana'],
+    XRP: ['xrp', 'ripple'],
+    DOGE: ['doge', 'dogecoin']
+};
+
+function scoreHeadlineNLP(text) {
+    const lower = (text || '').toLowerCase();
+    let score = 0;
+    BULL_WORDS.forEach(w => { if (lower.includes(w)) score += 1; });
+    BEAR_WORDS.forEach(w => { if (lower.includes(w)) score -= 1.15; });
+    return score;
+}
+
+async function fetchCryptoFundamentals() {
+    try {
+        const premAll = await getJson('https://fapi.binance.com/fapi/v1/premiumIndex', 7000);
+        const premMap = {};
+        if (Array.isArray(premAll)) {
+            premAll.forEach(p => { premMap[p.symbol] = p; });
+        }
+
+        await Promise.all(ACTIVE().map(async asset => {
+            const sym = `${asset}USDT`;
+            const pInfo = premMap[sym] || {};
+            const markP = parseFloat(pInfo.markPrice) || AppState.market[asset].price || 0;
+            const indexP = parseFloat(pInfo.indexPrice) || AppState.market[asset].price || 1;
+            const fundingRate = (parseFloat(pInfo.lastFundingRate) || 0) * 100;
+            const basisPct = indexP > 0 ? ((markP - indexP) / indexP) * 100 : 0;
+
+            let openInterestUsd = 0, topTraderLsRatio = 1.0, takerBuySellRatio = 1.0;
+            try {
+                const [oiRes, lsRes, tkRes] = await Promise.all([
+                    getJson(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${sym}`, 5000).catch(() => null),
+                    getJson(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${sym}&period=15m&limit=2`, 5000).catch(() => null),
+                    getJson(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${sym}&period=15m&limit=2`, 5000).catch(() => null)
+                ]);
+                if (oiRes && oiRes.openInterest) {
+                    openInterestUsd = parseFloat(oiRes.openInterest) * markP;
+                }
+                if (Array.isArray(lsRes) && lsRes.length) {
+                    topTraderLsRatio = parseFloat(lsRes[lsRes.length - 1].longShortRatio) || 1.0;
+                }
+                if (Array.isArray(tkRes) && tkRes.length) {
+                    takerBuySellRatio = parseFloat(tkRes[tkRes.length - 1].buySellRatio) || 1.0;
+                }
+            } catch (innerErr) {}
+
+            const takerScore = clamp((takerBuySellRatio - 1.0) / 0.25, -1, 1);
+            const topLsScore = clamp((topTraderLsRatio - 1.0) / 0.5, -1, 1);
+            let fundingScore = 0;
+            if (fundingRate > 0.06) fundingScore = -0.6;
+            else if (fundingRate < -0.04) fundingScore = 0.6;
+            else fundingScore = clamp(fundingRate / 0.03, -0.5, 0.5);
+
+            const basisScore = clamp(basisPct / 0.12, -1, 1);
+            const rawFund = 0.45 * takerScore + 0.25 * topLsScore + 0.15 * fundingScore + 0.15 * basisScore;
+            const bullScore = Math.round(clamp(50 + 50 * rawFund, 5, 95));
+
+            AppState.fundamentals[asset] = {
+                fundingRate,
+                basisPct,
+                openInterestUsd,
+                topTraderLsRatio,
+                takerBuySellRatio,
+                bullScore,
+                bearScore: 100 - bullScore,
+                crowdedLongTrap: fundingRate > 0.075,
+                crowdedShortTrap: fundingRate < -0.055,
+                ready: true,
+                summary: `Funding ${fundingRate >= 0 ? '+' : ''}${fundingRate.toFixed(4)}% · Taker B/S ${takerBuySellRatio.toFixed(2)}x · Top L/S ${topTraderLsRatio.toFixed(2)}`
+            };
+        }));
+
+        updateSourceStatus('fund', 'LIVE', 'Binance USDⓈ-M Perpetuals Funding, OI, Top L/S & Taker Flow');
+        renderIntelTab();
+    } catch (e) {
+        updateSourceStatus('fund', 'STANDBY', 'Futures API fallback');
+    }
+}
+
+async function fetchNewsAndMacro(manual = false) {
+    try {
+        const [fngRes, newsRes] = await Promise.all([
+            getJson('https://api.alternative.me/fng/?limit=1', 6000).catch(() => null),
+            getJson('https://min-api.cryptocompare.com/data/v2/news/?lang=EN', 7000).catch(() => null)
+        ]);
+
+        if (fngRes && Array.isArray(fngRes.data) && fngRes.data[0]) {
+            AppState.news.fngValue = parseInt(fngRes.data[0].value, 10) || 50;
+            AppState.news.fngLabel = fngRes.data[0].value_classification || 'Neutral';
+            const fngEl = document.getElementById('fng-header-badge');
+            if (fngEl) {
+                fngEl.innerText = `Fear & Greed: ${AppState.news.fngValue} (${AppState.news.fngLabel})`;
+            }
+        }
+
+        const rawArticles = (newsRes && Array.isArray(newsRes.Data)) ? newsRes.Data.slice(0, 40) : [];
+        const assetStats = Object.fromEntries(ALL.map(a => [a, { net: 0, bullCount: 0, bearCount: 0, latestHeadline: '' }]));
+        let globalNet = 0;
+
+        const parsedItems = rawArticles.map(art => {
+            const text = `${art.title || ''} ${(art.body || '').slice(0, 200)}`;
+            const cats = (art.categories || '').toUpperCase();
+            const s = scoreHeadlineNLP(text);
+            globalNet += s;
+
+            const matchedAssets = [];
+            ALL.forEach(a => {
+                const kwMatch = ASSET_KEYWORDS[a].some(k => text.toLowerCase().includes(k)) || cats.includes(a);
+                if (kwMatch) {
+                    matchedAssets.push(a);
+                    assetStats[a].net += s;
+                    if (s > 0) assetStats[a].bullCount++;
+                    if (s < 0) assetStats[a].bearCount++;
+                    if (!assetStats[a].latestHeadline) assetStats[a].latestHeadline = art.title;
+                }
+            });
+
+            return {
+                id: art.id,
+                title: art.title,
+                url: art.url,
+                source: art.source_info ? art.source_info.name : (art.source || 'News'),
+                time: (art.published_on || Math.floor(Date.now() / 1000)) * 1000,
+                sentiment: s > 0.2 ? 'BULLISH' : (s < -0.2 ? 'BEARISH' : 'NEUTRAL'),
+                score: s,
+                assets: matchedAssets.length ? matchedAssets : ['MACRO']
+            };
+        });
+
+        const fngBias = (AppState.news.fngValue - 50) / 50;
+        const globalScore = Math.round(clamp(50 + globalNet * 3.5 + fngBias * 12, 10, 90));
+        AppState.news.globalScore = globalScore;
+        AppState.news.items = parsedItems;
+        AppState.news.lastUpdated = Date.now();
+
+        ALL.forEach(a => {
+            const st = assetStats[a];
+            const aScore = Math.round(clamp(0.65 * (50 + st.net * 10) + 0.35 * globalScore, 10, 90));
+            AppState.news.assetScores[a] = {
+                score: aScore,
+                bullCount: st.bullCount,
+                bearCount: st.bearCount,
+                latestHeadline: st.latestHeadline || (parsedItems[0] ? parsedItems[0].title : 'Neutral macro news flow')
+            };
+        });
+
+        document.getElementById('tab-news-count').innerText = parsedItems.length;
+        updateSourceStatus('news', 'LIVE', `${parsedItems.length} headlines analyzed · Global News Score ${globalScore}/100`);
+        renderNewsStrip();
+        renderIntelTab();
+        if (manual) showToast('📰 Market News & Macro Sentiment refreshed.');
+    } catch (e) {
+        updateSourceStatus('news', 'STANDBY', 'News feed retry scheduled');
+    }
+}
+
+function renderNewsStrip() {
+    const strip = document.getElementById('news-strip-text');
+    if (!strip) return;
+    const topItems = AppState.news.items.slice(0, 5);
+    if (!topItems.length) return;
+    strip.innerHTML = topItems.map(item => {
+        const cls = item.sentiment === 'BULLISH' ? 'up' : (item.sentiment === 'BEARISH' ? 'down' : 'neutral');
+        return `<span style="margin-right:18px;"><strong class="${cls}">[${item.assets.join('/')}: ${item.sentiment}]</strong> <a href="${item.url}" target="_blank" style="color:var(--text-main); text-decoration:none;">${item.title}</a></span>`;
+    }).join(' • ');
+}
+
+function renderIntelTab() {
+    const fundContainer = document.getElementById('fundamentals-cards-container');
+    if (fundContainer) {
+        fundContainer.innerHTML = ACTIVE().map(a => {
+            const f = AppState.fundamentals[a] || {};
+            const n = AppState.news.assetScores[a] || { score: 50, bullCount: 0, bearCount: 0, latestHeadline: '' };
+            const fBias = f.bullScore >= 55 ? 'BULLISH' : (f.bullScore <= 45 ? 'BEARISH' : 'NEUTRAL');
+            const fCls = f.bullScore >= 55 ? 'badge-call' : (f.bullScore <= 45 ? 'badge-put' : 'badge-fee');
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <span>${NAMES[a]} (${a}) Fundamentals</span>
+                        <span class="badge ${fCls}">${fBias} (${f.bullScore || 50}/100)</span>
+                    </div>
+                    <div style="font-size:12px; line-height:1.8;">
+                        <div>Perp Funding Rate: <strong class="${(f.fundingRate || 0) > 0.06 ? 'down' : 'up'}">${(f.fundingRate || 0) >= 0 ? '+' : ''}${(f.fundingRate || 0).toFixed(4)}%</strong></div>
+                        <div>Futures-Spot Basis: <strong>${(f.basisPct || 0) >= 0 ? '+' : ''}${(f.basisPct || 0).toFixed(3)}%</strong></div>
+                        <div>Perp Open Interest: <strong>$${((f.openInterestUsd || 0) / 1e6).toFixed(1)}M</strong></div>
+                        <div>Top Trader Long/Short: <strong class="${(f.topTraderLsRatio || 1) >= 1 ? 'up' : 'down'}">${(f.topTraderLsRatio || 1).toFixed(2)}</strong></div>
+                        <div>Taker Buy/Sell Flow (15m): <strong class="${(f.takerBuySellRatio || 1) >= 1 ? 'up' : 'down'}">${(f.takerBuySellRatio || 1).toFixed(2)}x</strong></div>
+                        <div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border);">
+                            News Sentiment: <strong class="${n.score >= 55 ? 'up' : (n.score <= 45 ? 'down' : 'neutral')}">${n.score}/100</strong> (🟢 ${n.bullCount} / 🔴 ${n.bearCount})
+                            <span class="fee-subtext" style="white-space:normal;">Latest: ${n.latestHeadline}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    const newsContainer = document.getElementById('news-feed-container');
+    if (newsContainer && AppState.news.items.length) {
+        newsContainer.innerHTML = AppState.news.items.slice(0, 20).map(item => {
+            const bCls = item.sentiment === 'BULLISH' ? 'badge-call' : (item.sentiment === 'BEARISH' ? 'badge-put' : 'badge-fee');
+            return `
+                <div class="news-item-card">
+                    <div>
+                        <div style="margin-bottom:4px;">
+                            <span class="badge ${bCls}">${item.sentiment}</span>
+                            <span class="badge badge-spread" style="margin-left:4px;">${item.assets.join(', ')}</span>
+                            <span style="color:var(--text-muted); font-size:11px; margin-left:6px;">${item.source} · ${formatTime(item.time)} UTC</span>
+                        </div>
+                        <a href="${item.url}" target="_blank" style="color:var(--text-main); font-weight:600; font-size:13px; text-decoration:none;">${item.title}</a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+/* =========================================================
+   4. MULTI-TIMEFRAME TA & VOLATILITY ENGINE (FIXED S/R & HORIZONS)
+========================================================= */
+const HZ = {
+    intraday: {
+        label: 'Intraday (≤1 day)', tf: ['5m', '15m', '1h'], ideal: [4, 30],
+        rv: { tf: '1h', n: 48, ppy: 8760, perDay: 24, baN: 72 },
+        cfg: { holdH: 4, minHours: 2.5, maxHours: 48, t1ATR: 1.25, t2ATR: 2.1, stopATR: 0.60, maxBurn: 16, minAtrPct: 0.10 },
+        nk:  { minHours: 2.5, maxHours: 48, maxBurn: 18, t1ATR: 1.25, t2ATR: 2.1, stopATR: 0.60 }
+    },
+    swing: {
+        label: '1–3 days', tf: ['15m', '1h', '4h'], vwapN: 192, ideal: [12, 84],
+        rv: { tf: '1h', n: 96, ppy: 8760, perDay: 24, baN: 168 },
+        // minHours lowered to 4h so assets with only daily/2-day expiries (XRP/DOGE/SOL) never fail expiry window check
+        cfg: { holdH: 12, minHours: 4, maxHours: 110, t1ATR: 1.35, t2ATR: 2.25, stopATR: 0.65, maxBurn: 20, minAtrPct: 0.22 },
+        nk:  { minHours: 4, maxHours: 140, maxBurn: 22, t1ATR: 1.35, t2ATR: 2.3, stopATR: 0.65 }
+    },
+    weekly: {
+        label: 'Weekly (~5 days)', tf: ['1h', '4h', '1d'], vwapN: 120, ideal: [48, 200],
+        rv: { tf: '1d', n: 30, ppy: 365, perDay: 1, baN: 60 },
+        cfg: { holdH: 72, minHours: 24, maxHours: 260, t1ATR: 1.3, t2ATR: 2.1, stopATR: 0.70, maxBurn: 24, minAtrPct: 0.6 },
+        nk:  { minHours: 24, maxHours: 320, maxBurn: 26, t1ATR: 1.4, t2ATR: 2.3, stopATR: 0.70 }
+    },
+    monthly: {
+        label: 'Monthly (~20 days)', tf: ['4h', '1d', '1w'], vwapN: 180, ideal: [180, 1200],
+        rv: { tf: '1d', n: 60, ppy: 365, perDay: 1, baN: 90 },
+        cfg: { holdH: 240, minHours: 96, maxHours: 1100, t1ATR: 1.5, t2ATR: 2.5, stopATR: 0.75, maxBurn: 32, minAtrPct: 1.5 },
+        nk:  { minHours: 96, maxHours: 1200, maxBurn: 35 }
+    }
+};
+
+const GATE = {
+    strict: {
+        label: 'Strict (4-Pillar: TA + Fundamentals + News + Greeks)',
+        minAdx: 22, minRoom: 0.65, agree: [0, 1, 2],
+        maxIvRvNaked: 1.30, maxIvRvSpread: 1.60,
+        minGammaTheta: 2.5, minRR: 1.25, maxDebitWidth: 0.48,
+        minFundScore: 46, minNewsScore: 40,
+        desc: 'All 3 TFs + VWAP + Fund ≥ 46 + News ≥ 40 + IV/RV ≤ 1.30x + Γ/Θ ≥ 2.5x'
+    },
+    normal: {
+        label: 'Normal (Balanced 4-Pillar Quant)',
+        minAdx: 17, minRoom: 0.30, agree: [1, 2],
+        maxIvRvNaked: 1.48, maxIvRvSpread: 1.85,
+        minGammaTheta: 1.6, minRR: 1.05, maxDebitWidth: 0.58,
+        minFundScore: 38, minNewsScore: 32,
+        desc: 'Mid + Slow TFs + Fund ≥ 38 + News ≥ 32 + IV/RV ≤ 1.48x + Γ/Θ ≥ 1.6x'
+    }
+};
+
+const sum = a => a.reduce((x, y) => x + y, 0);
+const clamp = (v, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, v));
+
+const TA = {
+    ema: (data, p) => {
+        if (data.length < p) return data[data.length - 1] || 0;
+        let k = 2 / (p + 1), sma = data.slice(0, p).reduce((a, b) => a + b) / p, last = sma;
+        for(let i = p; i < data.length; i++) last = data[i] * k + last * (1 - k);
+        return last;
+    },
+    emaSeries: (d, p) => {
+        const k = 2 / (p + 1); let e = d[0];
+        return d.map((v, i) => { e = i ? v * k + e * (1 - k) : v; return e; });
+    },
+    macd: c => {
+        const f = TA.emaSeries(c, 12), s = TA.emaSeries(c, 26), l = f.map((v, i) => v - s[i]), g = TA.emaSeries(l, 9), n = c.length - 1;
+        return { hist: l[n] - g[n], prev: l[n - 1] - g[n - 1] };
+    },
+    rsi: (data, period = 14) => {
+        if(data.length <= period) return 50;
+        let gains = 0, losses = 0;
+        for(let i = 1; i <= period; i++) {
+            let diff = data[data.length - i] - data[data.length - i - 1];
+            if(diff >= 0) gains += diff; else losses -= diff;
+        }
+        let rs = gains / (losses === 0 ? 1 : losses);
+        return 100 - (100 / (1 + rs));
+    },
+    atr: (klines, period = 14) => {
+        if(klines.length <= period) return 20;
+        let trs = [];
+        for(let i = 1; i < klines.length; i++) {
+            let high = parseFloat(klines[i][2]), low = parseFloat(klines[i][3]), prevClose = parseFloat(klines[i-1][4]);
+            trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+        }
+        return trs.slice(-period).reduce((a,b)=>a+b)/period;
+    },
+    adx: (k, p = 14) => {
+        if (k.length < 2 * p + 2) return 20;
+        const tr = [], pd = [], nd = [];
+        for (let i = 1; i < k.length; i++) {
+            const H = +k[i][2], L = +k[i][3], pc = +k[i - 1][4], up = H - +k[i - 1][2], dn = +k[i - 1][3] - L;
+            tr.push(Math.max(H - L, Math.abs(H - pc), Math.abs(L - pc)));
+            pd.push(up > dn && up > 0 ? up : 0); nd.push(dn > up && dn > 0 ? dn : 0);
+        }
+        let t = sum(tr.slice(0, p)), a = sum(pd.slice(0, p)), b = sum(nd.slice(0, p)); const dx = [];
+        for (let i = p; i <= tr.length; i++) {
+            if (i > p) { t += tr[i - 1] - t / p; a += pd[i - 1] - a / p; b += nd[i - 1] - b / p; }
+            dx.push(100 * Math.abs(a - b) / Math.max(1e-9, a + b));
+        }
+        let x = sum(dx.slice(0, p)) / p;
+        for (let i = p; i < dx.length; i++) x = (x * (p - 1) + dx[i]) / p;
+        return x;
+    },
+    vwap: (klines) => {
+        let cumVol = 0, cumVolPrice = 0;
+        klines.forEach(k => {
+            let typicalPrice = (parseFloat(k[2]) + parseFloat(k[3]) + parseFloat(k[4])) / 3;
+            let vol = parseFloat(k[5]);
+            cumVol += vol;
+            cumVolPrice += typicalPrice * vol;
+        });
+        return cumVolPrice / (cumVol === 0 ? 1 : cumVol);
+    },
+    // FIXED v5.2: Uses genuine 5-bar structural fractal swings ([-4..-1, +1..+4]), ignores the last 4 forming/breakout bars,
+    // and ignores micro-noise closer than 0.25 ATR so active trend breakouts are never self-blocked by a 2-bar pause!
+    levels: (k, price, atrVal = 0) => {
+        let res = null, sup = null;
+        const minGap = atrVal * 0.25;
+        for (let i = 4; i < k.length - 4; i++) {
+            const h = +k[i][2], l = +k[i][3];
+            const nb = [-4, -3, -2, -1, 1, 2, 3, 4].map(j => k[i + j]);
+            if (h > price + minGap && nb.every(x => h >= +x[2]) && (res === null || h < res)) res = h;
+            if (l < price - minGap && nb.every(x => l <= +x[3]) && (sup === null || l > sup)) sup = l;
+        }
+        return { res, sup };
+    },
+    analyze: k => {
+        const C = k.map(x => +x[4]), V = k.map(x => +x[5]), n = k.length, price = C[n - 1];
+        const w = k.slice(-48), h = Math.floor(w.length / 2), old = w.slice(0, h), rec = w.slice(h);
+        const hi = a => Math.max(...a.map(x => +x[2])), lo = a => Math.min(...a.map(x => +x[3])), base = sum(V.slice(-22, -2)) / 20;
+        const atrVal = TA.atr(k, 14);
+        return {
+            price, ema20: TA.ema(C, 20), ema50: TA.ema(C, 50), ema200: TA.ema(C, 200), rsi: TA.rsi(C, 14), macd: TA.macd(C),
+            atr: atrVal, adx: TA.adx(k, 14), volRatio: base > 0 ? V[n - 2] / base : 1, dir: Math.sign(C[n - 2] - +k[n - 2][1]),
+            structure: (hi(rec) > hi(old) ? 0.5 : -0.5) + (lo(rec) > lo(old) ? 0.5 : -0.5), ...TA.levels(k.slice(-120), price, atrVal)
+        };
+    },
+    logRet: c => c.slice(1).map((v, i) => Math.log(v / c[i])),
+    rv: (c, ppy = 8760, N = 48) => {
+        const x = TA.logRet(c).slice(-N);
+        if (x.length < 5) return 0.45;
+        const m = sum(x) / x.length;
+        return Math.sqrt(sum(x.map(v => (v - m) ** 2)) / (x.length - 1)) * Math.sqrt(ppy);
+    }
+};
+
+if (!GATE[AppState.settings.gate]) AppState.settings.gate = 'normal';
+['gate-quick', 'set-gate'].forEach(i => {
+    const e = document.getElementById(i);
+    e.innerHTML = Object.entries(GATE).map(([k, g]) => `<option value="${k}">${g.label}</option>`).join('');
+    e.value = AppState.settings.gate;
+});
+
+function setGate(v) {
+    AppState.settings.gate = v;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    ['gate-quick', 'set-gate'].forEach(i => document.getElementById(i).value = v);
+    pushCloudState({ settings: AppState.settings });
+    evaluateSetups();
+}
+
+if (!HZ[AppState.settings.horizon]) AppState.settings.horizon = 'intraday';
+['horizon-quick', 'set-horizon'].forEach(i => {
+    const e = document.getElementById(i);
+    e.innerHTML = Object.entries(HZ).map(([k, h]) => `<option value="${k}">${h.label}</option>`).join('');
+    e.value = AppState.settings.horizon;
+});
+
+const fmtH = h => h < 24 ? `${h}h` : `${+(h / 24).toFixed(1)}d`;
+
+async function setHorizon(v) {
+    AppState.settings.horizon = v;
+    localStorage.setItem('appSettings', JSON.stringify(AppState.settings));
+    ['horizon-quick', 'set-horizon'].forEach(i => document.getElementById(i).value = v);
+    pushCloudState({ settings: AppState.settings });
+    AppState.ta = Object.fromEntries(ALL.map(a => [a, {}]));
+    AppState.autopicks = [];
+    AppState.gates = {};
+    document.getElementById('no-picks-msg').innerText = `Re-calibrating ${HZ[v].label} model...`;
+    document.getElementById('no-picks-msg').style.display = 'block';
+    await fetchSpotData();
+    evaluateSetups();
+}
+
+/* =========================================================
+   5. DATA FETCHERS & SEEDING (REST + WS)
+========================================================= */
+function parseOptionSymbol(symbol) {
+    const parts = symbol.split('-');
+    if (parts.length < 4) return null;
+    const asset = parts[0];
+    const dateStr = parts[1];
+    const strike = parseFloat(parts[2]);
+    const side = parts[3].toUpperCase() === 'C' ? 'CALL' : 'PUT';
+
+    const year = 2000 + parseInt(dateStr.substring(0, 2), 10);
+    const month = parseInt(dateStr.substring(2, 4), 10) - 1;
+    const day = parseInt(dateStr.substring(4, 6), 10);
+    const expiry = Date.UTC(year, month, day, 8, 0, 0);
+
+    return { asset, strike, side, expiry, symbol };
+}
+
+const EAPI = 'https://eapi.binance.com';
+
+async function getJson(url, ms = 8000) {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+    try {
+        const r = await fetch(url, { signal: ctl.signal });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+    } finally { clearTimeout(timer); }
+}
+
+function rebuildOptionGroups() {
+    const g = Object.fromEntries(ALL.map(a => [a, []]));
+    Object.values(liveOptionStore).forEach(o => g[o.asset] && g[o.asset].push(o));
+    ALL.forEach(a => AppState.options[a] = g[a]);
+}
+
+async function seedOptionsData() {
+    try {
+        const [marks, tickers] = await Promise.all([
+            getJson(EAPI + '/eapi/v1/mark'),
+            getJson(EAPI + '/eapi/v1/ticker').catch(() => [])
+        ]);
+        if (!Array.isArray(marks)) throw new Error('unexpected /mark response');
+        const tk = Object.fromEntries((Array.isArray(tickers) ? tickers : []).map(t => [t.symbol, t]));
+        const now = Date.now();
+        marks.forEach(m => {
+            const parsed = parseOptionSymbol(m.symbol);
+            if (!parsed || parsed.expiry < now || !ALL.includes(parsed.asset)) return;
+            const ex = liveOptionStore[m.symbol];
+            if (ex && ex.src === 'ws' && now - ex.ts < 15000) return;
+            const t = tk[m.symbol] || {};
+            const mark = parseFloat(m.markPrice) || 0;
+            const bid = parseFloat(t.bidPrice) || 0;
+            const ask = parseFloat(t.askPrice) || 0;
+            let spread = 999;
+            if (bid > 0 && ask > 0 && mark > 0) spread = ((ask - bid) / mark) * 100;
+            else if (ask > 0 && mark > 0) spread = ((ask - mark) / mark) * 100;
+            liveOptionStore[m.symbol] = {
+                ...(ex || {}),
+                symbol: m.symbol, asset: parsed.asset, side: parsed.side, strike: parsed.strike, expiry: parsed.expiry,
+                mark, bid, ask: ask > 0 ? ask : mark,
+                iv: parseFloat(m.markIV) || 0,
+                delta: parseFloat(m.delta) || 0,
+                gamma: parseFloat(m.gamma) || 0,
+                theta: -Math.abs(parseFloat(m.theta) || 0),
+                vega: parseFloat(m.vega) || 0,
+                spread: Math.max(0, spread),
+                volume: parseFloat(t.volume) || (ex && ex.volume) || 0,
+                bidQty: parseFloat(t.bidQty) || (ex && ex.bidQty) || 1,
+                askQty: parseFloat(t.askQty) || (ex && ex.askQty) || 1,
+                oi: (ex && ex.oi) || 0,
+                ts: now, src: 'rest'
+            };
+        });
+        rebuildOptionGroups();
+        Feed.restAt = now;
+        Feed.restErr = '';
+    } catch (e) {
+        Feed.restErr = (e && e.name === 'AbortError') ? 'REST timeout' : String((e && e.message) || e);
+    }
+    refreshFeedStatus();
+}
+
+async function fetchSpotData() {
+    try {
+        let spotRes = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(ALL.map(a => a + 'USDT')))}`);
+        let spotData = await spotRes.json();
+        spotData.forEach(s => {
+            let asset = s.symbol.replace('USDT', '');
+            if (AppState.market[asset]) {
+                AppState.market[asset].price = parseFloat(s.lastPrice);
+                AppState.market[asset].change = parseFloat(s.priceChangePercent);
+            }
+        });
+        updateSourceStatus('spot', 'LIVE');
+    } catch (e) { updateSourceStatus('spot', 'ERROR'); }
+
+    const HK = AppState.settings.horizon, H = HZ[HK], need = [...new Set([...H.tf, H.rv.tf])];
+    const kl = async (a, iv) => (await fetch(`https://api.binance.com/api/v3/klines?symbol=${a}USDT&interval=${iv}&limit=250`)).json();
+    for (const asset of ACTIVE()) {
+        try {
+            const K = Object.fromEntries(await Promise.all(need.map(async iv => [iv, await kl(asset, iv)])));
+            const [kf, km, ks] = H.tf.map(iv => K[iv]), rc = K[H.rv.tf].map(k => +k[4]);
+            AppState.market[asset].klines = kf;
+            let vk;
+            if (H.vwapN) vk = kf.slice(-H.vwapN);
+            else { 
+                const d = new Date(), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); 
+                vk = kf.filter(k => k[0] >= day0); 
+                if (vk.length < 6) vk = kf.slice(-48); 
+            }
+            const tf = { f: TA.analyze(kf), m: TA.analyze(km), s: TA.analyze(ks) };
+            AppState.ta[asset] = { hz: HK, tf, price: tf.f.price, vwap: TA.vwap(vk), rsi: tf.m.rsi, atr: tf.s.atr, rv: TA.rv(rc, H.rv.ppy, H.rv.n), ret: TA.logRet(rc) };
+        } catch (e) {}
+    }
+}
+
+let wsConnection = null;
+function connectOptionsWebSocket() {
+    const wsUrl = 'wss://fstream.binance.com/market/stream?streams=btcusdt@optionMarkPrice/ethusdt@optionMarkPrice';
+    try {
+        wsConnection = new WebSocket(wsUrl);
+        wsConnection.onopen = () => { Feed.wsOpen = true; Feed.wsOpenedAt = Date.now(); refreshFeedStatus(); };
+        wsConnection.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg && msg.data && processIncomingOptions(msg.data) > 0) {
+                    const first = !Feed.wsAt;
+                    Feed.wsAt = Date.now();
+                    if (first) refreshFeedStatus();
+                }
+            } catch (err) {}
+        };
+        wsConnection.onerror = () => refreshFeedStatus();
+        wsConnection.onclose = () => { Feed.wsOpen = false; refreshFeedStatus(); setTimeout(connectOptionsWebSocket, 4000); };
+    } catch (err) {
+        Feed.wsOpen = false;
+        refreshFeedStatus();
+        setTimeout(connectOptionsWebSocket, 8000);
+    }
+}
+
+let altWs = null;
+function connectAltWebSocket() {
+    const alts = ACTIVE().filter(a => ALT.includes(a));
+    if (altWs) { altWs.onclose = null; altWs.close(); altWs = null; Feed.altOpen = false; }
+    if (!alts.length) return;
+    try {
+        altWs = new WebSocket('wss://fstream.binance.com/market/stream?streams=' + alts.map(a => a.toLowerCase() + 'usdt@optionMarkPrice').join('/'));
+        altWs.onopen = () => { Feed.altOpen = true; };
+        altWs.onmessage = e => { try { const m = JSON.parse(e.data); if (m && m.data && processIncomingOptions(m.data) > 0) Feed.altAt = Date.now(); } catch (err) {} };
+        altWs.onclose = () => { Feed.altOpen = false; setTimeout(connectAltWebSocket, 5000); };
+    } catch (err) {}
+}
+
+function processIncomingOptions(data) {
+    const items = Array.isArray(data) ? data : [data];
+    const now = Date.now();
+    let accepted = 0;
+
+    items.forEach(item => {
+        if (!item || !item.s) return;
+        const parsed = parseOptionSymbol(item.s);
+        if (!parsed || parsed.expiry < now) return;
+
+        const mark = parseFloat(item.mp) || 0;
+        const bid = parseFloat(item.bo) || 0;
+        const ask = parseFloat(item.ao) || 0;
+        const iv = parseFloat(item.vo) || 0;
+        const delta = parseFloat(item.d) || 0;
+        const gamma = parseFloat(item.g) || 0;
+        const theta = -Math.abs(parseFloat(item.t) || 0);
+        const vega = parseFloat(item.v ?? item.vega) || 0;
+
+        let spread = 999;
+        if (bid > 0 && ask > 0 && mark > 0) spread = ((ask - bid) / mark) * 100;
+        else if (ask > 0 && mark > 0) spread = ((ask - mark) / mark) * 100;
+
+        const existing = liveOptionStore[item.s] || {};
+
+        liveOptionStore[item.s] = {
+            ...existing,
+            symbol: item.s,
+            asset: parsed.asset,
+            side: parsed.side,
+            strike: parsed.strike,
+            expiry: parsed.expiry,
+            mark,
+            bid,
+            ask: ask > 0 ? ask : mark,
+            iv,
+            delta,
+            gamma,
+            theta,
+            vega,
+            spread: Math.max(0, spread),
+            bidQty: parseFloat(item.bq) || existing.bidQty || 1,
+            askQty: parseFloat(item.aq) || existing.askQty || 1,
+            ts: now, src: 'ws'
+        };
+        accepted++;
+    });
+
+    if (accepted) rebuildOptionGroups();
+    return accepted;
+}
+
+/* =========================================================
+   6. 4-PILLAR QUANT ENGINE (v5.2 — FIXED S/R, TARGET CAP & SPREADS)
+========================================================= */
+function scoreUnderlying(asset) {
+    const ta = AppState.ta[asset], T = ta && ta.tf, hk = AppState.settings.horizon, H = HZ[hk];
+    if (!T || !T.s || ta.hz !== hk) return null;
+    const [L1, L2, L3] = H.tf, p = T.f.price, a1 = T.s.atr, a15 = T.m.atr, c = [], m = T.m.macd, r = T.m.rsi, h = T.s;
+    const add = (label, w, v, note) => c.push({ label, w, v: clamp(v), note });
+    const trend = t => (t.price > t.ema20 && t.ema20 > t.ema50) ? 1 : ((t.price < t.ema20 && t.ema20 < t.ema50) ? -1 : (t.price > t.ema50 ? 0.35 : -0.35));
+    const up = Math.min(3.5, h.res ? (h.res - p) / a1 : 3.0), dn = Math.min(3.5, h.sup ? (p - h.sup) / a1 : 3.0);
+
+    add(`Chart Trend ${L1} (EMA20/50)`, 7, trend(T.f));
+    add(`Chart Trend ${L2} (EMA20/50)`, 11, trend(T.m));
+    add(`Chart Trend ${L3} (EMA20/50)`, 14, trend(h));
+    add(`${L3} Macro EMA50/200`, 7, (h.price > h.ema200 ? 0.5 : -0.5) + (h.ema50 > h.ema200 ? 0.5 : -0.5));
+    add(`Swing Structure (${L3} HH/HL)`, 10, h.structure);
+    add('Intraday VWAP Bias', 9, (p - ta.vwap) / (1.8 * a15), `VWAP $${fmtSpot(ta.vwap)}`);
+    add(`MACD Momentum (${L2})`, 8, m.hist > 0 ? (m.hist > m.prev ? 1 : 0.5) : (m.hist < m.prev ? -1 : -0.5));
+    add(`RSI Regime (${L2})`, 5, r >= 78 ? -0.35 : (r >= 50 ? (r - 50) / 20 : (r <= 22 ? 0.35 : -(50 - r) / 20)), `RSI ${r.toFixed(1)}`);
+    add(`Volume Expansion (${L2})`, 5, T.m.dir * clamp((T.m.volRatio - 0.8) / 0.8, 0, 1), `vol x${T.m.volRatio.toFixed(2)}`);
+    add('S/R ATR Runway', 5, (up - dn) / 2, `${up.toFixed(1)} ATR up / ${dn.toFixed(1)} ATR down`);
+
+    const techR = sum(c.map(x => x.w * x.v)) / sum(c.map(x => x.w)), adx = T.m.adx, f = clamp((adx - 14) / 14, 0, 1);
+    const taBull = Math.round(50 + 50 * techR * (0.55 + 0.45 * f));
+
+    const fund = AppState.fundamentals[asset] || { bullScore: 50, fundingRate: 0, takerBuySellRatio: 1, topTraderLsRatio: 1, ready: false };
+    const fundNorm = (fund.bullScore - 50) / 50;
+    add('Derivatives Fundamentals (Perp Flow/OI/Funding)', 11, fundNorm, fund.summary || 'Neutral');
+
+    const newsObj = AppState.news.assetScores[asset] || { score: 50, latestHeadline: '' };
+    const newsNorm = (newsObj.score - 50) / 50;
+    add('Live Market News NLP & Macro Sentiment', 8, newsNorm, `News ${newsObj.score}/100 · F&G ${AppState.news.fngValue}`);
+
+    const totalR = sum(c.map(x => x.w * x.v)) / sum(c.map(x => x.w));
+    const bull = Math.round(50 + 50 * totalR * (0.60 + 0.40 * f));
+
+    return {
+        T: { m5: T.f, m15: T.m, h1: T.s }, p, a1, c,
+        taBull, taBear: 100 - taBull,
+        fundBull: fund.bullScore, fundBear: 100 - fund.bullScore, fund,
+        newsBull: newsObj.score, newsBear: 100 - newsObj.score, newsObj,
+        bull, bear: 100 - bull,
+        adx, atrPct: a1 / p * 100, up, dn, rv: Math.max(0.10, ta.rv || 0.45), vwap: ta.vwap,
+        trend: { m5: trend(T.f), m15: trend(T.m), h1: trend(h) }
+    };
+}
+
+function calculateMaxPain(options, currentSpot) {
+    if (!options || !options.length) return null;
+    const strikes = [...new Set(options.map(o => o.strike))].sort((a,b) => a-b);
+    let minLoss = Infinity, maxPainStrike = currentSpot;
+    strikes.forEach(targetStrike => {
+        let totalCashLoss = 0;
+        options.forEach(o => {
+            const oi = o.oi || 1;
+            if (o.side === 'CALL' && targetStrike > o.strike) totalCashLoss += (targetStrike - o.strike) * oi;
+            else if (o.side === 'PUT' && targetStrike < o.strike) totalCashLoss += (o.strike - targetStrike) * oi;
+        });
+        if (totalCashLoss < minLoss) { minLoss = totalCashLoss; maxPainStrike = targetStrike; }
+    });
+    return maxPainStrike;
+}
+
+function evaluateSetups() {
+    AppState.autopicks = [];
+    AppState.gates = {};
+    const now = Date.now(), st = AppState.settings, H = HZ[st.horizon] || HZ.intraday;
+    const activeGateKey = st.gate === 'strict' ? 'strict' : 'normal';
+    const G = GATE[activeGateKey];
+    const CFG = { minDepth: st.minDepth || 0.05, ...H.cfg };
+
+    document.getElementById('hz-info').innerHTML = `
+        <strong>${H.label}</strong> · Structure: <strong>${st.tradeMode.toUpperCase()}</strong> · Expiries: <strong>${fmtH(CFG.minHours)}–${fmtH(CFG.maxHours)}</strong> · 
+        Active Filter: <strong>${G.label}</strong> · 
+        Fundamentals Gate: <strong>${st.useFundamentalsGate !== false ? 'ON' : 'OFF'}</strong> · 
+        News Gate: <strong>${st.useNewsGate !== false ? 'ON' : 'OFF'}</strong> · 
+        Auto-Trade: <strong style="color:${st.autoPickEnabled !== false ? 'var(--green)' : 'var(--red)'}">${st.autoPickEnabled !== false ? 'ENABLED' : 'PAUSED'}</strong>
+    `;
+
+    ACTIVE().forEach(asset => {
+        const id = asset.toLowerCase(), u = scoreUnderlying(asset), S = AppState.market[asset].price;
+        if (!u || !S) return;
+        const isAlt = ALT.includes(asset);
+        // Adaptive Bid-Ask Spread allowance (+6% for Altcoin options like BNB/SOL/XRP/DOGE where market-maker spreads are wider)
+        const effectiveMaxSpread = (st.maxSpread || 16) + (isAlt ? 6 : 0);
+
+        const isCall = u.bull >= u.bear, dir = isCall ? 'CALL' : 'PUT', sgn = isCall ? 1 : -1;
+        const compScore = isCall ? u.bull : u.bear;
+        const dirTaScore = isCall ? u.taBull : u.taBear;
+        const dirFundScore = isCall ? u.fundBull : u.fundBear;
+        const dirNewsScore = isCall ? u.newsBull : u.newsBear;
+
+        const live = (AppState.options[asset] || []).filter(o => o.expiry > now);
+        // Primary expiry window check; if empty on altcoins, fall back to any liquid contract between 2h and 96h
+        let inWin = live.filter(o => { const hr = (o.expiry - now) / 36e5; return hr >= CFG.minHours && hr <= CFG.maxHours; });
+        if (!inWin.length && live.length) {
+            inWin = live.filter(o => { const hr = (o.expiry - now) / 36e5; return hr >= 2.0 && hr <= 96; });
+        }
+
+        const rawRoom = isCall ? u.up : u.dn;
+        // ADX Momentum Breakout Override: When ADX >= 28 and 4-Pillar Score >= 72, price is actively breaking through minor S/R
+        const isMomentumBreakout = u.adx >= 28 && compScore >= 72;
+        const effectiveRoom = isMomentumBreakout ? Math.max(rawRoom, 1.15) : rawRoom;
+
+        const tfStrictOk = GATE.strict.agree.every(i => [u.trend.m5, u.trend.m15, u.trend.h1][i] * sgn > 0);
+        const tfNormalOk = GATE.normal.agree.every(i => [u.trend.m15, u.trend.h1][i - 1] * sgn > 0);
+        const vwapStrictOk = isCall ? (S >= u.vwap * 0.996) : (S <= u.vwap * 1.004);
+        const rsiStrictOk = isCall ? (u.T.m15.rsi >= 45 && u.T.m15.rsi <= 82) : (u.T.m15.rsi >= 18 && u.T.m15.rsi <= 55);
+        const rsiNormalOk = isCall ? (u.T.m15.rsi >= 40 && u.T.m15.rsi <= 85) : (u.T.m15.rsi >= 14 && u.T.m15.rsi <= 60);
+
+        const trapBlock = (isCall && u.fund.crowdedLongTrap) || (!isCall && u.fund.crowdedShortTrap);
+        const fundStrictOk = st.useFundamentalsGate === false || (!trapBlock && dirFundScore >= GATE.strict.minFundScore);
+        const fundNormalOk = st.useFundamentalsGate === false || (!trapBlock && dirFundScore >= GATE.normal.minFundScore);
+
+        const newsStrictOk = st.useNewsGate === false || (dirNewsScore >= GATE.strict.minNewsScore);
+        const newsNormalOk = st.useNewsGate === false || (dirNewsScore >= GATE.normal.minNewsScore);
+
+        const underlyingStrictPass = tfStrictOk && vwapStrictOk && rsiStrictOk && fundStrictOk && newsStrictOk &&
+            u.adx >= GATE.strict.minAdx && u.atrPct >= CFG.minAtrPct && compScore >= Math.max(st.minScore, 66) && effectiveRoom >= GATE.strict.minRoom;
+        const underlyingNormalPass = tfNormalOk && rsiNormalOk && fundNormalOk && newsNormalOk &&
+            u.adx >= GATE.normal.minAdx && u.atrPct >= (CFG.minAtrPct * 0.80) && compScore >= st.minScore && effectiveRoom >= GATE.normal.minRoom;
+
+        const gateReasons = [];
+        if (!live.length) gateReasons.push('Waiting for option stream');
+        else if (!inWin.length) gateReasons.push(`No expiry in ${fmtH(CFG.minHours)}–${fmtH(CFG.maxHours)} window`);
+        if (u.adx < G.minAdx) gateReasons.push(`ADX ${u.adx.toFixed(0)} < ${G.minAdx} (Choppy chart)`);
+        if (u.atrPct < CFG.minAtrPct * (activeGateKey === 'strict' ? 1 : 0.80)) gateReasons.push(`ATR ${u.atrPct.toFixed(2)}% too small`);
+        if (compScore < (activeGateKey === 'strict' ? Math.max(st.minScore, 66) : st.minScore)) gateReasons.push(`4-Pillar ${dir} score ${compScore} below hurdle`);
+        const badTfs = G.agree.filter(i => [u.trend.m5, u.trend.m15, u.trend.h1][i] * sgn <= 0);
+        if (badTfs.length) gateReasons.push(`${badTfs.map(i => H.tf[i]).join('/')} chart trend not aligned`);
+        if (activeGateKey === 'strict' && !vwapStrictOk) gateReasons.push(`Spot on wrong side of VWAP ($${fmtSpot(u.vwap)})`);
+        if (effectiveRoom < G.minRoom) gateReasons.push(`Only ${rawRoom.toFixed(2)} ATR room to 1h S/R`);
+        if (activeGateKey === 'strict' && !rsiStrictOk) gateReasons.push(`15m RSI (${u.T.m15.rsi.toFixed(0)}) outside momentum zone`);
+        if (st.useFundamentalsGate !== false) {
+            if (trapBlock) gateReasons.push(`Perp Funding overcrowded (${u.fund.fundingRate.toFixed(3)}% liquidation risk)`);
+            else if (dirFundScore < G.minFundScore) gateReasons.push(`Fundamentals (${dirFundScore}/100) oppose ${dir}`);
+        }
+        if (st.useNewsGate !== false && dirNewsScore < G.minNewsScore) {
+            gateReasons.push(`Breaking News sentiment (${dirNewsScore}/100) opposes ${dir}`);
+        }
+
+        const cands = [], miss = {}, bump = k => { miss[k] = (miss[k] || 0) + 1; };
+
+        if (!gateReasons.length) {
+            const sideOptions = inWin.filter(o => o.side === dir && (isCall ? o.delta > 0 : o.delta < 0));
+            // FIXED v5.2: Never cap dT1 below CFG.t1ATR (1.25x-1.35x ATR) so Target 1 is always larger than Stop Loss (0.60x-0.65x ATR)
+            const dT1 = CFG.t1ATR * u.a1;
+            const dT2 = CFG.t2ATR * u.a1;
+            const dSL = CFG.stopATR * u.a1;
+            const estIvWin = u.adx > 25 ? 0.015 : 0.005;
+            const estIvLoss = -0.015;
+
+            const pillarSummary = {
+                ta: dirTaScore,
+                fund: dirFundScore,
+                news: dirNewsScore,
+                fundingRate: u.fund.fundingRate,
+                takerRatio: u.fund.takerBuySellRatio,
+                headline: u.newsObj.latestHeadline
+            };
+
+            // 1. SINGLE LEG OUTRIGHT
+            if (st.tradeMode === 'naked' || st.tradeMode === 'both') {
+                const minPrem = S * 0.00025;
+                sideOptions.forEach(o => {
+                    const hrs = (o.expiry - now) / 36e5, ad = Math.abs(o.delta);
+                    if (o.bid <= 0 || o.mark <= minPrem) return bump('No bid / tiny mark');
+                    if (o.askQty < CFG.minDepth) return bump('Thin ask depth');
+                    if (o.spread > effectiveMaxSpread) return bump(`Spread > ${effectiveMaxSpread}%`);
+
+                    const deltaStrict = ad >= 0.36 && ad <= 0.65;
+                    const deltaNormal = ad >= 0.25 && ad <= 0.72;
+                    if (!deltaNormal) return bump('Delta outside 0.25–0.72');
+                    if (activeGateKey === 'strict' && !deltaStrict) return bump('Delta outside Strict 0.36–0.65');
+
+                    const ivRvRatio = o.iv / u.rv;
+                    const ivRvDiff = (o.iv - u.rv) * 100;
+                    const ivStrict = ivRvRatio <= GATE.strict.maxIvRvNaked;
+                    const ivNormal = ivRvRatio <= GATE.normal.maxIvRvNaked;
+                    if (!ivNormal) return bump(`IV/RV ${ivRvRatio.toFixed(2)}x too expensive`);
+                    if (activeGateKey === 'strict' && !ivStrict) return bump(`IV/RV ${ivRvRatio.toFixed(2)}x > Strict 1.30x`);
+
+                    const entryMark = o.mark;
+                    const gammaDeltaGain1 = ad * dT1 + 0.5 * o.gamma * dT1 * dT1 + o.vega * estIvWin * 100;
+                    const gammaDeltaGain2 = ad * dT2 + 0.5 * o.gamma * dT2 * dT2 + o.vega * (estIvWin * 1.4) * 100;
+                    const thetaBurn = Math.abs(o.theta) * (CFG.holdH / 24);
+                    const thetaBurnPct = (thetaBurn / entryMark) * 100;
+                    const gammaThetaRatio = gammaDeltaGain1 / Math.max(0.0001, thetaBurn);
+
+                    if (thetaBurnPct > CFG.maxBurn) return bump('Theta burn too high');
+                    const gtStrict = gammaThetaRatio >= GATE.strict.minGammaTheta && thetaBurnPct <= 12;
+                    const gtNormal = gammaThetaRatio >= GATE.normal.minGammaTheta;
+                    if (!gtNormal) return bump(`Γ/Θ ${gammaThetaRatio.toFixed(1)}x < ${GATE.normal.minGammaTheta}x`);
+                    if (activeGateKey === 'strict' && !gtStrict) return bump(`Γ/Θ ${gammaThetaRatio.toFixed(1)}x < Strict ${GATE.strict.minGammaTheta}x`);
+
+                    const roundTripFee = calculateSingleLegFee(S, entryMark, 1) * 2;
+                    const slippageBuffer = Math.max(0, o.ask - entryMark) * 0.25;
+                    const totalFriction = roundTripFee + slippageBuffer;
+
+                    const rawT1 = entryMark + gammaDeltaGain1 - thetaBurn * 0.6;
+                    const rawT2 = entryMark + gammaDeltaGain2 - thetaBurn;
+                    const lossMove = ad * dSL - 0.5 * o.gamma * dSL * dSL + thetaBurn * 0.4 + o.vega * Math.abs(estIvLoss) * 100;
+                    const rawSL = entryMark - lossMove;
+
+                    const t1 = Math.max(entryMark * 1.14 + totalFriction, rawT1);
+                    const t2 = Math.max(t1 * 1.15, rawT2);
+                    const sl1 = Math.max(entryMark * 0.74, Math.min(entryMark * 0.86, rawSL));
+
+                    const netReward = (t1 - entryMark) - totalFriction;
+                    const netRisk = (entryMark - sl1) + totalFriction;
+                    const rr = netReward / Math.max(0.0001, netRisk);
+
+                    const rrStrict = rr >= GATE.strict.minRR && o.spread <= Math.min(effectiveMaxSpread, isAlt ? 16 : 11);
+                    const rrNormal = rr >= GATE.normal.minRR;
+                    if (!rrNormal) return bump(`Net R/R ${rr.toFixed(2)} < ${GATE.normal.minRR}`);
+                    if (activeGateKey === 'strict' && !rrStrict) return bump(`Net R/R ${rr.toFixed(2)} or spread fails Strict`);
+
+                    const isStrictQualified = underlyingStrictPass && deltaStrict && ivStrict && gtStrict && rrStrict;
+                    const isNormalQualified = underlyingNormalPass && deltaNormal && ivNormal && gtNormal && rrNormal;
+
+                    const idealBonus = (hrs >= H.ideal[0] && hrs <= H.ideal[1]) ? 5 : 0;
+                    const sc = Math.round(clamp(
+                        0.44 * compScore +
+                        0.16 * clamp(100 - o.spread * 4.5, 0, 100) +
+                        0.18 * clamp((rr / 2.0) * 100, 0, 100) +
+                        0.12 * clamp((1.40 - ivRvRatio) * 120, 0, 100) +
+                        0.10 * clamp((gammaThetaRatio / 4.5) * 100, 0, 100) +
+                        idealBonus, 0, 100
+                    ));
+                    if (sc < st.minScore) return bump(`Score ${sc} < ${st.minScore}`);
+
+                    const exitBy = Math.min(o.expiry - (st.expiryCutoffHours || 1.5) * 36e5, now + CFG.holdH * 36e5);
+                    const beMove = (totalFriction + thetaBurn * 0.5) / Math.max(0.1, ad);
+
+                    cands.push({
+                        asset, isSpread: false, side: dir,
+                        tier: isStrictQualified ? 'STRICT' : 'NORMAL',
+                        isStrictQualified, isNormalQualified,
+                        pillars: pillarSummary,
+                        contract: o.symbol, strike: o.strike, expiry: o.expiry,
+                        entry: entryMark, askPrice: o.ask, bidPrice: o.bid,
+                        delta: o.delta, gamma: o.gamma, theta: o.theta, vega: o.vega,
+                        iv: o.iv, rv: u.rv, ivRvRatio, ivRvDiff,
+                        gammaThetaRatio, thetaBurnPct,
+                        spread: o.spread, score: sc, grade: sc >= 80 ? 'A+' : (sc >= 72 ? 'A' : 'B+'),
+                        t1, t2, sl1, rr: rr.toFixed(2),
+                        bePct: (beMove / S) * 100, be: beMove,
+                        hrs, depth: o.askQty, taLog: u.c, exitBy,
+                        bookNotes: [
+                            `4-Pillar Alignment: Chart TA=${dirTaScore}/100 · Derivatives Fundamentals=${dirFundScore}/100 · Market News=${dirNewsScore}/100`,
+                            `McMillan: |Δ|=${ad.toFixed(2)} (Sweet-Spot), Γ/Θ Efficiency=${gammaThetaRatio.toFixed(2)}x (${thetaBurnPct.toFixed(1)}% hold burn)`,
+                            `Natenberg: IV=${(o.iv*100).toFixed(1)}% vs 1h RV=${(u.rv*100).toFixed(1)}% (IV/RV=${ivRvRatio.toFixed(2)}x)`,
+                            `Spina: Round-trip Fee+Slippage=$${totalFriction.toFixed(3)} deducted upfront · Net R/R=${rr.toFixed(2)}:1`
+                        ],
+                        plan: `AUTO-EXEC ${isStrictQualified ? 'STRICT' : 'NORMAL'} SINGLE LEG: Buy ${o.symbol} @ Mark $${entryMark.toFixed(2)}. Auto-Close T1 @ $${t1.toFixed(2)}, T2 @ $${t2.toFixed(2)}, or Stop Loss @ $${sl1.toFixed(2)}.`
+                    });
+                });
+            }
+
+            // 2. VERTICAL DEBIT SPREAD
+            if (st.tradeMode === 'spread' || st.tradeMode === 'both') {
+                sideOptions.forEach(longLeg => {
+                    const longAd = Math.abs(longLeg.delta);
+                    const longStrict = longAd >= 0.42 && longAd <= 0.68 && longLeg.spread <= Math.min(effectiveMaxSpread, isAlt ? 16 : 11);
+                    const longNormal = longAd >= 0.34 && longAd <= 0.72 && longLeg.spread <= effectiveMaxSpread;
+                    if (!longNormal || longLeg.bid <= 0) return;
+                    if (activeGateKey === 'strict' && !longStrict) return;
+                    if (longLeg.askQty < CFG.minDepth) return bump('Low long leg depth');
+
+                    const shortCandidates = sideOptions.filter(o =>
+                        o.expiry === longLeg.expiry &&
+                        (isCall ? o.strike > longLeg.strike : o.strike < longLeg.strike)
+                    );
+
+                    shortCandidates.forEach(shortLeg => {
+                        const shortAd = Math.abs(shortLeg.delta);
+                        if (shortLeg.bid <= 0 || shortLeg.bidQty < CFG.minDepth) return bump('Low short wing depth');
+                        if (shortLeg.spread > effectiveMaxSpread * 1.35) return bump('Wide short wing spread');
+
+                        const shortStrict = shortAd >= 0.15 && shortAd <= 0.38;
+                        const shortNormal = shortAd >= 0.10 && shortAd <= 0.45;
+                        if (!shortNormal) return;
+                        if (activeGateKey === 'strict' && !shortStrict) return;
+
+                        const width = Math.abs(shortLeg.strike - longLeg.strike);
+                        const spreadMark = longLeg.mark - shortLeg.mark;
+                        if (spreadMark <= 0.005 || width <= spreadMark) return;
+
+                        const debitWidthRatio = spreadMark / width;
+                        const dwStrict = debitWidthRatio >= 0.14 && debitWidthRatio <= GATE.strict.maxDebitWidth;
+                        const dwNormal = debitWidthRatio >= 0.10 && debitWidthRatio <= GATE.normal.maxDebitWidth;
+                        if (!dwNormal) return bump(`Debit/Width ${(debitWidthRatio*100).toFixed(0)}% too high`);
+                        if (activeGateKey === 'strict' && !dwStrict) return bump(`Debit/Width ${(debitWidthRatio*100).toFixed(0)}% > Strict 48%`);
+
+                        const netDelta = Math.abs(longLeg.delta - shortLeg.delta);
+                        if (netDelta < (activeGateKey === 'strict' ? 0.14 : 0.10)) return bump('Net Delta too small');
+
+                        const netGamma = longLeg.gamma - shortLeg.gamma;
+                        const netTheta = longLeg.theta - shortLeg.theta;
+                        const netVega = longLeg.vega - shortLeg.vega;
+
+                        const avgIv = (longLeg.iv + shortLeg.iv) / 2;
+                        const ivRvRatio = avgIv / u.rv;
+                        const skewEdge = (shortLeg.iv - longLeg.iv) * 100;
+                        const ivStrict = ivRvRatio <= GATE.strict.maxIvRvSpread && skewEdge >= -8.0;
+                        const ivNormal = ivRvRatio <= GATE.normal.maxIvRvSpread;
+                        if (!ivNormal) return bump('Spread IV/RV too high');
+                        if (activeGateKey === 'strict' && !ivStrict) return bump('Spread IV/RV or skew fails Strict');
+
+                        const dSpread1 = netDelta * dT1 + 0.5 * netGamma * dT1 * dT1 - Math.abs(netTheta) * (CFG.holdH / 36) + netVega * estIvWin * 100;
+                        const dSpread2 = netDelta * dT2 + 0.5 * netGamma * dT2 * dT2 - Math.abs(netTheta) * (CFG.holdH / 24) + netVega * (estIvWin * 1.4) * 100;
+                        const dSpreadSL = netDelta * dSL - 0.5 * netGamma * dSL * dSL + Math.abs(netTheta) * (CFG.holdH / 48);
+
+                        const roundTripFee = (calculateSingleLegFee(S, longLeg.mark, 1) + calculateSingleLegFee(S, shortLeg.mark, 1)) * 2;
+                        const slippageCost = (Math.max(0, longLeg.ask - longLeg.mark) + Math.max(0, shortLeg.mark - shortLeg.bid)) * 0.20;
+                        const totalFriction = roundTripFee + slippageCost;
+
+                        const rawT1 = spreadMark + dSpread1;
+                        const rawT2 = spreadMark + dSpread2;
+                        const t1 = Math.min(width * 0.88, Math.max(spreadMark * 1.15 + totalFriction, rawT1));
+                        const t2 = Math.min(width * 0.95, Math.max(t1 * 1.12, rawT2));
+                        const sl1 = Math.max(spreadMark * 0.72, Math.min(spreadMark * 0.86, spreadMark - dSpreadSL));
+
+                        if (t1 <= spreadMark + totalFriction || t2 <= t1) return bump('Spread target capped by width');
+
+                        const netReward = (t1 - spreadMark) - totalFriction;
+                        const netRisk = (spreadMark - sl1) + totalFriction;
+                        const rr = netReward / Math.max(0.0001, netRisk);
+
+                        const rrStrict = rr >= GATE.strict.minRR;
+                        const rrNormal = rr >= GATE.normal.minRR;
+                        if (!rrNormal) return bump(`Spread R/R ${rr.toFixed(2)} < ${GATE.normal.minRR}`);
+                        if (activeGateKey === 'strict' && !rrStrict) return bump(`Spread R/R ${rr.toFixed(2)} < Strict ${GATE.strict.minRR}`);
+
+                        const thetaBurn = Math.abs(netTheta) * (CFG.holdH / 24);
+                        const thetaBurnPct = (thetaBurn / spreadMark) * 100;
+                        const gammaThetaRatio = (netDelta * dT1 + 0.5 * netGamma * dT1 * dT1) / Math.max(0.0001, thetaBurn);
+
+                        const isStrictQualified = underlyingStrictPass && longStrict && shortStrict && dwStrict && ivStrict && rrStrict;
+                        const isNormalQualified = underlyingNormalPass && longNormal && shortNormal && dwNormal && ivNormal && rrNormal;
+
+                        const avgSpread = (longLeg.spread + shortLeg.spread) / 2;
+                        const hrs = (longLeg.expiry - now) / 36e5;
+                        const sc = Math.round(clamp(
+                            0.44 * compScore +
+                            0.16 * clamp(100 - avgSpread * 4, 0, 100) +
+                            0.20 * clamp((rr / 2.0) * 100, 0, 100) +
+                            0.10 * clamp((0.58 - debitWidthRatio) * 200, 0, 100) +
+                            0.10 * clamp(70 + skewEdge * 5, 0, 100), 0, 100
+                        ));
+                        if (sc < st.minScore) return bump(`Spread score ${sc} < ${st.minScore}`);
+
+                        const exitBy = Math.min(longLeg.expiry - (st.expiryCutoffHours || 1.5) * 36e5, now + CFG.holdH * 36e5);
+
+                        cands.push({
+                            asset, isSpread: true, side: dir,
+                            tier: isStrictQualified ? 'STRICT' : 'NORMAL',
+                            isStrictQualified, isNormalQualified,
+                            pillars: pillarSummary,
+                            contract: `${longLeg.strike}/${shortLeg.strike} ${dir} Spread (${longLeg.symbol.split('-')[1]})`,
+                            legs: { long: longLeg, short: shortLeg },
+                            strike: `${longLeg.strike} / ${shortLeg.strike}`,
+                            expiry: longLeg.expiry,
+                            entry: spreadMark,
+                            width, debitWidthRatio,
+                            delta: longLeg.delta - shortLeg.delta,
+                            gamma: netGamma,
+                            theta: netTheta,
+                            vega: netVega,
+                            iv: avgIv, rv: u.rv, ivRvRatio, ivRvDiff: (avgIv - u.rv) * 100,
+                            gammaThetaRatio, thetaBurnPct,
+                            spread: avgSpread,
+                            score: sc, grade: sc >= 80 ? 'A+' : (sc >= 72 ? 'A' : 'B+'),
+                            t1, t2, sl1, rr: rr.toFixed(2),
+                            bePct: (spreadMark / S) * 100, be: spreadMark,
+                            hrs, depth: Math.min(longLeg.askQty, shortLeg.bidQty),
+                            taLog: u.c, exitBy,
+                            bookNotes: [
+                                `4-Pillar Alignment: Chart TA=${dirTaScore}/100 · Derivatives Fundamentals=${dirFundScore}/100 · Market News=${dirNewsScore}/100`,
+                                `McMillan Spread: Width=$${width} · Net Mark Debit=$${spreadMark.toFixed(2)} (${(debitWidthRatio*100).toFixed(1)}% of width) · Net |Δ|=${netDelta.toFixed(2)}`,
+                                `Natenberg Skew: Long IV=${(longLeg.iv*100).toFixed(1)}% / Short IV=${(shortLeg.iv*100).toFixed(1)}% (Skew=${skewEdge >= 0 ? '+' : ''}${skewEdge.toFixed(1)}%)`,
+                                `Spina Friction: Dual-leg Round-Trip Fee=$${roundTripFee.toFixed(3)} · Net R/R=${rr.toFixed(2)}:1`
+                            ],
+                            plan: `AUTO-EXEC ${isStrictQualified ? 'STRICT' : 'NORMAL'} DEBIT SPREAD: Buy $${longLeg.strike} / Sell $${shortLeg.strike} ${dir} @ Net Mark $${spreadMark.toFixed(2)}. Auto-Close T1 @ $${t1.toFixed(2)}, T2 @ $${t2.toFixed(2)}, or Stop Loss @ $${sl1.toFixed(2)}.`
+                        });
+                    });
+                });
+            }
+
+            cands.sort((a, b) => (b.isStrictQualified - a.isStrictQualified) || (b.score - a.score));
+            AppState.autopicks.push(...cands);
+            if (!cands.length) {
+                gateReasons.push(`${dir} regime valid (${compScore}/100), strikes filtered: ` + Object.entries(miss).map(([k, v]) => `${k} (${v})`).join(', '));
+            }
+        }
+
+        const status = gateReasons.join(' · ');
+        if (status) AppState.gates[asset] = status;
+
+        const cardEl = document.getElementById(`card-${id}`);
+        if (cardEl) {
+            const chg = AppState.market[asset].change;
+            document.getElementById(`${id}-score`).innerText = `${compScore}/100`;
+            const trendBadge = document.getElementById(`${id}-trend`);
+            trendBadge.innerText = compScore >= st.minScore ? (isCall ? 'BULLISH' : 'BEARISH') : 'NEUTRAL';
+            trendBadge.className = `badge ${compScore >= st.minScore ? (isCall ? 'badge-call' : 'badge-put') : ''}`;
+            document.getElementById(`${id}-price`).innerText = `$${fmtSpot(S)}`;
+            const chgEl = document.getElementById(`${id}-change`);
+            chgEl.innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)}%`;
+            chgEl.className = chg >= 0 ? 'up' : 'down';
+            document.getElementById(`${id}-rsi`).innerText = u.T.m15.rsi.toFixed(1);
+            document.getElementById(`${id}-detail`).innerHTML = `
+                <div class="pillar-bar">
+                    <span class="pillar-tag">📈 TA: <strong class="${dirTaScore >= 55 ? 'up' : 'down'}">${dirTaScore}</strong></span>
+                    <span class="pillar-tag">⚡ Perp Fund: <strong class="${dirFundScore >= 52 ? 'up' : 'down'}">${dirFundScore}</strong> (F:${u.fund.fundingRate >= 0 ? '+' : ''}${u.fund.fundingRate.toFixed(3)}%)</span>
+                    <span class="pillar-tag">📰 News: <strong class="${dirNewsScore >= 50 ? 'up' : 'down'}">${dirNewsScore}</strong></span>
+                </div>
+                <div style="margin-top:6px;">
+                    TF ${H.tf[0]}/${H.tf[1]}/${H.tf[2]}: ADX ${u.adx.toFixed(0)} · ATR ${u.atrPct.toFixed(2)}% · 1h RV ${(u.rv*100).toFixed(1)}% · Taker B/S ${u.fund.takerBuySellRatio.toFixed(2)}x<br>
+                    S/R: Sup $${u.T.h1.sup ? fmtSpot(u.T.h1.sup) : '--'} | Res $${u.T.h1.res ? fmtSpot(u.T.h1.res) : '--'} | VWAP $${fmtSpot(u.vwap)}<br>
+                    ${status ? `<span class="down"><strong>NO TRADE</strong></span>: ${status}` : `<span class="up"><strong>${dir} QUALIFIED</strong></span>: ${cands.length} strike(s) active in Auto-Picks`}
+                </div>
+            `;
+        }
+    });
+
+    AppState.autopicks.sort((a, b) => (b.isStrictQualified - a.isStrictQualified) || (b.score - a.score));
+
+    autoExecuteQualifiedPicks();
+    runAutoCloseEngine();
+
+    renderAutoPicks();
+    renderOptionChain();
+    renderPaperTrades();
+}
+
+/* =========================================================
+   7. AUTOMATIC PAPER-TRADE EXECUTION & AUTO-CLOSE ENGINE
+========================================================= */
+function isContractInCooldown(contract, asset) {
+    const now = Date.now();
+    Object.keys(AppState.cooldowns).forEach(k => {
+        if (AppState.cooldowns[k] <= now) delete AppState.cooldowns[k];
+    });
+    const activeCount = Object.keys(AppState.cooldowns).length;
+    const cdEl = document.getElementById('cooldown-indicator');
+    if (cdEl) cdEl.innerText = `Cooldowns: ${activeCount}`;
+    return Boolean(AppState.cooldowns[contract] > now || AppState.cooldowns[`ASSET_${asset}`] > now);
+}
+
+function buildTradeFromPick(p, sourceLabel) {
+    const currentSpot = AppState.market[p.asset] ? AppState.market[p.asset].price : 0;
+    const resolvedTier = p.tier || (p.isStrictQualified ? 'STRICT' : 'NORMAL');
+    return {
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        asset: p.asset,
+        isSpread: p.isSpread,
+        tier: resolvedTier,
+        contract: p.contract,
+        side: p.side,
+        strike: p.strike,
+        expiry: p.expiry,
+        entry: p.entry,
+        qty: 1,
+        t1: p.t1,
+        t2: p.t2,
+        sl1: p.sl1,
+        initialSl: p.sl1,
+        t1Reached: false,
+        t1PartialDone: false,
+        slStrikes: 0,
+        underlyingAtEntry: currentSpot,
+        time: Date.now(),
+        source: sourceLabel,
+        scoreAtEntry: p.score,
+        exitBy: p.exitBy || null,
+        longLeg: p.isSpread ? { symbol: p.legs.long.symbol, strike: p.legs.long.strike, entry: p.legs.long.mark, current: p.legs.long.mark } : null,
+        shortLeg: p.isSpread ? { symbol: p.legs.short.symbol, strike: p.legs.short.strike, entry: p.legs.short.mark, current: p.legs.short.mark } : null
+    };
+}
+
+function autoExecuteQualifiedPicks() {
+    if (AppState.settings.autoPickEnabled === false) return;
+    const maxOpen = AppState.settings.maxOpenTrades || 20;
+    const maxPerAsset = AppState.settings.maxPerAsset || 6;
+    const execTier = AppState.settings.autoExecTier || 'active_gate';
+    let addedCount = 0;
+
+    AppState.autopicks.forEach(p => {
+        if (execTier === 'strict_only' && !p.isStrictQualified) return;
+        if (AppState.paperTrades.length >= maxOpen) return;
+
+        const alreadyOpen = AppState.paperTrades.some(t => t.contract === p.contract);
+        if (alreadyOpen) return;
+
+        if (isContractInCooldown(p.contract, p.asset)) return;
+
+        const assetOpenCount = AppState.paperTrades.filter(t => t.asset === p.asset).length;
+        if (assetOpenCount >= maxPerAsset) return;
+
+        const trade = buildTradeFromPick(p, `AUTO_${p.tier}`);
+        AppState.paperTrades.push(trade);
+        AppState.sessionStats.opened++;
+        addedCount++;
+    });
+
+    if (addedCount > 0) {
+        localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+        pushCloudState({ paper_trades: AppState.paperTrades });
+        updateSessionStatsUI();
+        showToast(`⚡ <strong>Auto-Pick Executed:</strong> ${addedCount} 4-Pillar qualified strike(s) added to Paper Trading.`, true);
+    }
+}
+
+function getLiveTradeValuation(t) {
+    if (t.isSpread) {
+        const longOpt = liveOptionStore[t.longLeg.symbol];
+        const shortOpt = liveOptionStore[t.shortLeg.symbol];
+        if (!longOpt || !shortOpt) return { hasLive: false, price: t.entry };
+        t.longLeg.current = longOpt.mark;
+        t.shortLeg.current = shortOpt.mark;
+        return { hasLive: true, price: Math.max(0.01, longOpt.mark - shortOpt.mark) };
+    } else {
+        const opt = liveOptionStore[t.contract];
+        if (!opt) return { hasLive: false, price: t.entry };
+        return { hasLive: true, price: opt.mark };
+    }
+}
+
+function runAutoCloseEngine() {
+    if (AppState.settings.autoCloseEnabled === false || !AppState.paperTrades.length) return;
+    const now = Date.now();
+    const mode = AppState.settings.autoCloseMode || 't1_split_t2';
+    const reqConfirm = Math.max(1, AppState.settings.antiWickConfirmations || 2);
+    const expiryCutoffMs = (AppState.settings.expiryCutoffHours || 1.5) * 36e5;
+    const slCooldownMs = (AppState.settings.cooldownHours ?? 1) * 36e5;
+    let changed = false;
+    let closedNotices = [];
+
+    for (let i = AppState.paperTrades.length - 1; i >= 0; i--) {
+        const t = AppState.paperTrades[i];
+        const val = getLiveTradeValuation(t);
+        if (!val.hasLive) continue;
+        const currentPrice = val.price;
+        const asset = t.asset || t.contract.split('-')[0].split(' ')[0];
+        const currentSpot = AppState.market[asset] ? AppState.market[asset].price : (t.underlyingAtEntry || 0);
+
+        let trigger = null;
+
+        if (t.t2 && currentPrice >= t.t2) {
+            trigger = 'TARGET_2';
+        } else if (t.t1 && currentPrice >= t.t1) {
+            if (mode === 't1_or_t2') {
+                trigger = 'TARGET_1';
+            } else if (mode === 't1_lock_t2') {
+                if (!t.t1Reached) {
+                    t.t1Reached = true;
+                    t.sl1 = Math.max(t.sl1, t.t1 * 0.985);
+                    changed = true;
+                    showToast(`🔒 <strong>T1 Profit Floor Locked:</strong> ${t.contract} hit T1 ($${t.t1.toFixed(2)}). Stop raised to $${t.sl1.toFixed(2)}, trailing for T2 ($${t.t2.toFixed(2)}).`, true);
+                }
+            } else if (mode === 't1_split_t2' && !t.t1PartialDone) {
+                const halfQty = +(t.qty * 0.5).toFixed(4);
+                if (halfQty > 0) {
+                    const partialTrade = { ...t, qty: halfQty, tier: resolveTradeTier(t) };
+                    const feeData = computeTradeFees(partialTrade, currentPrice, currentSpot);
+                    AppState.tradeHistory.push({
+                        ...partialTrade,
+                        exit: currentPrice,
+                        totalFee: feeData.totalFee,
+                        grossPnl: feeData.grossPnl,
+                        netPnl: feeData.netPnl,
+                        closeTime: now,
+                        closeReason: 'TARGET_1 (50%)'
+                    });
+                    t.qty = +(t.qty - halfQty).toFixed(4);
+                    t.t1PartialDone = true;
+                    t.t1Reached = true;
+                    t.sl1 = Math.max(t.sl1, t.entry * 1.02);
+                    AppState.sessionStats.closed++;
+                    changed = true;
+                    showToast(`🎯 <strong>Target 1 Scale-Out (50%):</strong> Closed half of ${t.contract} @ $${currentPrice.toFixed(2)} (Net +$${feeData.netPnl.toFixed(2)}).`, true);
+                }
+            }
+        }
+
+        if (!trigger && t.sl1 && currentPrice <= t.sl1) {
+            if (t.t1Reached) {
+                trigger = 'TARGET_1';
+            } else {
+                t.slStrikes = (t.slStrikes || 0) + 1;
+                changed = true;
+                if (t.slStrikes >= reqConfirm) {
+                    trigger = 'STOP_LOSS';
+                }
+            }
+        } else if (currentPrice > (t.sl1 || 0) && t.slStrikes > 0) {
+            t.slStrikes = 0;
+            changed = true;
+        }
+
+        if (!trigger && ((t.expiry && now >= t.expiry - expiryCutoffMs) || (t.exitBy && now >= t.exitBy))) {
+            trigger = 'TIME_STOP';
+        }
+
+        if (trigger) {
+            const feeData = computeTradeFees(t, currentPrice, currentSpot);
+            AppState.tradeHistory.push({
+                ...t,
+                tier: resolveTradeTier(t),
+                exit: currentPrice,
+                totalFee: feeData.totalFee,
+                grossPnl: feeData.grossPnl,
+                netPnl: feeData.netPnl,
+                closeTime: now,
+                closeReason: trigger
+            });
+            AppState.paperTrades.splice(i, 1);
+            AppState.sessionStats.closed++;
+
+            if (trigger === 'STOP_LOSS') {
+                AppState.cooldowns[t.contract] = now + Math.max(15 * 60000, slCooldownMs);
+                AppState.cooldowns[`ASSET_${asset}`] = now + Math.min(30 * 60000, slCooldownMs);
+            } else {
+                AppState.cooldowns[t.contract] = now + 15 * 60000;
+            }
+            closedNotices.push(`${t.contract} [${trigger}] Net: ${feeData.netPnl >= 0 ? '+' : ''}$${feeData.netPnl.toFixed(2)}`);
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+        localStorage.setItem('tradeHistory', JSON.stringify(AppState.tradeHistory));
+        localStorage.setItem('tradeCooldowns', JSON.stringify(AppState.cooldowns));
+        pushCloudState({ paper_trades: AppState.paperTrades, trade_history: AppState.tradeHistory });
+        updateSessionStatsUI();
+        if (closedNotices.length) {
+            const isWin = !closedNotices[0].includes('STOP_LOSS');
+            showToast(`🎯 <strong>Auto-Closed:</strong> ${closedNotices.join(' | ')}`, isWin);
+        }
+    }
+}
+
+function updateSessionStatsUI() {
+    const el = document.getElementById('auto-session-stats');
+    if (el) el.innerText = `Auto-Opened: ${AppState.sessionStats.opened} | Auto-Closed: ${AppState.sessionStats.closed}`;
+    const tabOpen = document.getElementById('tab-open-count');
+    if (tabOpen) tabOpen.innerText = AppState.paperTrades.length;
+    const closedCountEl = document.getElementById('closed-history-count');
+    if (closedCountEl) closedCountEl.innerText = AppState.tradeHistory.length;
+}
+
+/* =========================================================
+   8. UI RENDERING
+========================================================= */
+function formatTime(ms) {
+    let d = new Date(ms);
+    return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
+function renderAutoPicks() {
+    let tbody = document.getElementById('autopicks-body');
+    let msg = document.getElementById('no-picks-msg');
+    tbody.innerHTML = '';
+    if (!AppState.autopicks.length) {
+        const g = Object.entries(AppState.gates || {}).map(([a, t]) => `${a}: ${t}`).join('   |   ');
+        msg.innerText = g ? `WAITING FOR 4-PILLAR ALIGNMENT — ${g}` : 'No setup currently meets 4-Pillar (TA + Fundamentals + News + Greeks) hurdles...';
+        msg.style.display = 'block';
+        return;
+    }
+    msg.style.display = 'none';
+
+    AppState.autopicks.forEach((p, idx) => {
+        let tr = document.createElement('tr');
+        const isCall = p.side === 'CALL';
+        const isOpenInPaper = AppState.paperTrades.some(t => t.contract === p.contract);
+        const inCooldown = isContractInCooldown(p.contract, p.asset);
+
+        let strikeCellHTML = '';
+        if (p.isSpread) {
+            strikeCellHTML = `
+                <div class="legs-box">
+                    <div class="leg-row">
+                        <span class="badge badge-call" style="font-size:10px; padding:1px 4px;">BUY</span>
+                        <strong>$${p.legs.long.strike}</strong> ${renderChartIcon(p.legs.long.symbol, 'Long Leg Chart')}
+                    </div>
+                    <div class="leg-row">
+                        <span class="badge badge-put" style="font-size:10px; padding:1px 4px;">SELL</span>
+                        <strong>$${p.legs.short.strike}</strong> ${renderChartIcon(p.legs.short.symbol, 'Short Leg Chart')}
+                    </div>
+                </div>
+                <span class="fee-subtext">Width: $${p.width} (${(p.debitWidthRatio*100).toFixed(0)}% Debit)</span>
+            `;
+        } else {
+            strikeCellHTML = `
+                <div>
+                    <strong>$${p.strike}</strong>${renderChartIcon(p.contract, 'Option Strike Chart')}
+                </div>
+                <span class="fee-subtext">Ask: $${p.askPrice.toFixed(2)} / Bid: $${p.bidPrice.toFixed(2)}</span>
+            `;
+        }
+
+        let contractCellHTML = '';
+        if (p.isSpread) {
+            contractCellHTML = `
+                <a href="#" onclick="showWhy(${idx}); return false;" style="color:var(--yellow); text-decoration:underline; font-weight:600;">${p.contract}</a>
+                <span class="fee-subtext">${p.legs.long.symbol} / ${p.legs.short.symbol}</span>
+            `;
+        } else {
+            contractCellHTML = `
+                <a href="#" onclick="showWhy(${idx}); return false;" style="color:var(--yellow); text-decoration:underline; font-weight:600;">${p.contract}</a>
+                ${renderChartIcon(p.contract, 'Option Chart')}
+            `;
+        }
+
+        const tierBadge = renderTierBadge(p.isStrictQualified ? 'STRICT' : 'NORMAL');
+        const ivRvColor = p.ivRvRatio <= 1.15 ? 'var(--green)' : (p.ivRvRatio <= 1.35 ? 'var(--yellow)' : 'var(--red)');
+        const pil = p.pillars || { ta: 50, fund: 50, news: 50, fundingRate: 0, takerRatio: 1 };
+
+        const pillarCellHTML = `
+            <div style="font-size:11px;">
+                <span class="up">TA:${pil.ta}</span> · 
+                <span style="color:#82B1FF;">Fund:${pil.fund}</span> · 
+                <span style="color:var(--yellow);">News:${pil.news}</span>
+                <span class="fee-subtext">Taker ${pil.takerRatio.toFixed(2)}x · Funding ${pil.fundingRate >= 0 ? '+' : ''}${pil.fundingRate.toFixed(3)}%</span>
+            </div>
+        `;
+
+        let statusActionHTML = '';
+        if (isOpenInPaper) {
+            statusActionHTML = `
+                <span class="badge-cloud" style="display:inline-block; margin-bottom:4px;">⚡ AUTO-IN PAPER</span><br>
+                <button onclick="switchTab('tab-paper')" style="padding:3px 7px; font-size:11px;">View Open</button>
+            `;
+        } else if (inCooldown) {
+            statusActionHTML = `
+                <span class="badge-fee" style="display:inline-block; margin-bottom:4px;">⏳ COOLDOWN</span><br>
+                <button class="primary" onclick="addPaperTrade(${idx})" style="padding:3px 7px; font-size:11px;">Force +1</button>
+            `;
+        } else {
+            statusActionHTML = `
+                <button class="primary" onclick="addPaperTrade(${idx})">+ Paper Trade</button>
+                ${!p.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(p.contract)}', '_blank')" title="Binance Chart">📈</button>` : ''}
+            `;
+        }
+
+        tr.innerHTML = `
+            <td>
+                ${tierBadge}
+                <span class="badge ${p.isSpread ? 'badge-spread' : (isCall ? 'badge-call' : 'badge-put')}" style="margin-left:4px;">${p.isSpread ? 'DEBIT SPREAD' : p.side}</span>
+            </td>
+            <td><strong>${p.asset}</strong></td>
+            <td>${contractCellHTML}</td>
+            <td>${strikeCellHTML}</td>
+            <td>${pillarCellHTML}</td>
+            <td>${formatTime(p.expiry)}<span class="fee-subtext">${p.hrs >= 48 ? (p.hrs/24).toFixed(1)+'d' : p.hrs.toFixed(1)+'h'} left</span></td>
+            <td><strong>$${p.entry.toFixed(2)}</strong></td>
+            <td>${p.delta.toFixed(2)}</td>
+            <td>${p.theta.toFixed(2)}/d<span class="fee-subtext" style="color:var(--green);">Γ/Θ: ${p.gammaThetaRatio.toFixed(1)}x</span></td>
+            <td>
+                ${(p.iv * 100).toFixed(1)}%
+                <span class="fee-subtext" style="color:${ivRvColor};">IV/RV: ${p.ivRvRatio.toFixed(2)}x (${p.ivRvDiff >= 0 ? '+' : ''}${p.ivRvDiff.toFixed(1)}%)</span>
+            </td>
+            <td>${p.spread.toFixed(1)}%<span class="fee-subtext">Depth: ${p.depth.toFixed(2)}</span></td>
+            <td style="font-weight:bold;">${p.score}/100 · ${p.grade}</td>
+            <td class="up"><strong>$${p.t1.toFixed(2)}</strong><span class="fee-subtext" style="color:var(--green);">T2: $${p.t2.toFixed(2)}</span></td>
+            <td class="down"><strong>$${p.sl1.toFixed(2)}</strong></td>
+            <td><strong>${p.rr}:1</strong></td>
+            <td>${p.bePct.toFixed(2)}%</td>
+            <td>${statusActionHTML}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function showWhy(idx) {
+    const p = AppState.autopicks[idx];
+    if (!p) return;
+    document.getElementById('why-content').innerHTML = `
+        <div style="margin-bottom:10px;padding:10px;border:1px solid var(--yellow);border-radius:6px;background:rgba(240,185,11,0.06);">
+            <strong>Execution Plan:</strong> ${p.plan}
+        </div>
+        <div style="margin-bottom:10px;padding:10px;border:1px solid #2962FF;border-radius:6px;background:rgba(41,98,255,0.08);">
+            <strong>📚 4-Pillar & 3-Book Quantitative Verification:</strong>
+            <ul style="margin:6px 0 0 18px; font-size:12px;">
+                ${(p.bookNotes || []).map(n => `<li>${n}</li>`).join('')}
+            </ul>
+        </div>
+        <div style="margin-bottom:8px;"><strong>Structure:</strong> ${p.contract} | <strong>Qualification Tier:</strong> ${p.tier} | <strong>Score:</strong> ${p.score}/100 (${p.grade})</div>
+        <div style="margin-top:8px;"><strong>Underlying 4-Pillar Scorecard (Chart Trend + TA + Perp Fundamentals + News NLP):</strong></div>
+        <table style="width:100%; font-size:12px; margin-top:4px;">
+            ${p.taLog.map(x => `<tr><td>${x.label}</td><td class="${x.v >= 0 ? 'up':'down'}">${x.v > 0 ? '+':''}${x.v.toFixed(2)}</td><td style="color:var(--text-muted)">${x.note||''}</td></tr>`).join('')}
+        </table>
+        <div style="margin-top:10px;"><strong>Greeks & Liquidity:</strong></div>
+        Net Delta: ${p.delta.toFixed(3)} | Net Gamma: ${p.gamma.toFixed(5)} | Net Theta: ${p.theta.toFixed(2)}/day | Net Vega: ${p.vega.toFixed(2)} | Book Depth: ${p.depth.toFixed(2)} contracts
+    `;
+    document.getElementById('why-modal').style.display = 'flex';
+}
+
+function renderOptionChain() {
+    let asset = document.getElementById('chain-asset-select').value;
+    let options = AppState.options[asset];
+    let tbody = document.getElementById('chain-body');
+    tbody.innerHTML = '';
+    if(!options || !options.length) return;
+
+    let currentPrice = AppState.market[asset].price;
+    let maxPain = calculateMaxPain(options, currentPrice);
+    if (maxPain) document.getElementById('max-pain-metric').innerText = `Max Pain: $${maxPain.toLocaleString()}`;
+
+    let strikes = [...new Set(options.map(o => o.strike))].sort((a,b) => a-b);
+    let nearestExpiry = [...new Set(options.map(o => o.expiry))].sort((a,b) => a-b)[0];
+    let calls = {}, puts = {};
+    options.filter(o => o.expiry === nearestExpiry).forEach(o => {
+        if(o.side === 'CALL') calls[o.strike] = o; else puts[o.strike] = o;
+    });
+
+    strikes.forEach(strike => {
+        let c = calls[strike], p = puts[strike];
+        if(!c && !p) return;
+        let isAtm = Math.abs(strike - currentPrice) < currentPrice * 0.01;
+        let isPain = maxPain === strike;
+
+        let tr = document.createElement('tr');
+        if(isAtm) tr.style.background = 'rgba(240, 185, 11, 0.12)';
+        if(isPain) tr.style.border = '1px solid var(--yellow)';
+
+        const cell = (opt) => {
+            if(!opt) return `<td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>`;
+            return `
+                <td style="color:var(--text-muted)">${opt.bid.toFixed(2)}</td>
+                <td style="color:var(--text-muted)">${opt.ask.toFixed(2)}</td>
+                <td style="font-weight:bold">${opt.mark.toFixed(2)}</td>
+                <td>${(opt.iv*100).toFixed(1)}%</td>
+                <td>${opt.delta.toFixed(2)}</td>
+                <td style="color:var(--yellow); font-size:11px;">${(opt.oi||0).toFixed(1)}</td>
+            `;
+        };
+
+        tr.innerHTML = `
+            ${cell(c)}
+            <td style="text-align:center; font-weight:bold; color: ${isPain ? 'var(--yellow)' : (isAtm ? 'var(--yellow)' : 'var(--text-main)')}; border-left:1px solid var(--border); border-right:1px solid var(--border);">
+                ${c ? renderChartIcon(c.symbol, 'Call Chart') : ''}
+                $${strike} ${isPain?'🎯':''}
+                ${p ? renderChartIcon(p.symbol, 'Put Chart') : ''}
+            </td>
+            ${cell(p)}
+        `;
+        tbody.appendChild(tr);
+    });
+}
+document.getElementById('chain-asset-select').addEventListener('change', renderOptionChain);
+
+/* =========================================================
+   9. PAPER TRADING MANUAL ACTIONS & TABLE RENDERING
+========================================================= */
+function addPaperTrade(idx) {
+    let p = AppState.autopicks[idx];
+    if (!p) return;
+    let trade = buildTradeFromPick(p, 'MANUAL');
+    AppState.paperTrades.push(trade);
+    localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+    pushCloudState({ paper_trades: AppState.paperTrades });
+    updateSessionStatsUI();
+    showToast(`✅ Added ${p.contract} (${trade.tier}) to Paper Trading.`);
+    switchTab('tab-paper');
+    renderPaperTrades();
+}
+
+function updateTradeQty(id, newQty) {
+    let val = parseFloat(newQty);
+    if (isNaN(val) || val <= 0) val = 1;
+    let trade = AppState.paperTrades.find(t => t.id === id);
+    if (trade) {
+        trade.qty = val;
+        localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+        pushCloudState({ paper_trades: AppState.paperTrades });
+        renderPaperTrades();
+    }
+}
+
+function closePaperTrade(id) {
+    let idx = AppState.paperTrades.findIndex(t => t.id === id);
+    if(idx > -1) {
+        let t = AppState.paperTrades[idx];
+        const asset = t.asset || t.contract.split('-')[0].split(' ')[0];
+        const currentSpot = AppState.market[asset] ? AppState.market[asset].price : (t.underlyingAtEntry || 0);
+        const val = getLiveTradeValuation(t);
+        const exitPrice = val.price;
+
+        const feeData = computeTradeFees(t, exitPrice, currentSpot);
+        AppState.tradeHistory.push({
+            ...t,
+            tier: resolveTradeTier(t),
+            exit: exitPrice,
+            totalFee: feeData.totalFee,
+            grossPnl: feeData.grossPnl,
+            netPnl: feeData.netPnl,
+            closeTime: Date.now(),
+            closeReason: 'MANUAL'
+        });
+        AppState.paperTrades.splice(idx, 1);
+        localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+        localStorage.setItem('tradeHistory', JSON.stringify(AppState.tradeHistory));
+        pushCloudState({ paper_trades: AppState.paperTrades, trade_history: AppState.tradeHistory });
+        updateSessionStatsUI();
+        renderPaperTrades();
+    }
+}
+
+function deletePaperTrade(id) {
+    AppState.paperTrades = AppState.paperTrades.filter(t => t.id !== id);
+    localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+    pushCloudState({ paper_trades: AppState.paperTrades });
+    updateSessionStatsUI();
+    renderPaperTrades();
+}
+
+function renderPaperTrades() {
+    if (document.activeElement && document.activeElement.classList.contains('qty-input')) return;
+
+    let tbody = document.getElementById('paper-body');
+    tbody.innerHTML = '';
+    let openNetPnlTotal = 0, openFeesTotal = 0;
+
+    AppState.paperTrades.forEach(t => {
+        const asset = t.asset || t.contract.split('-')[0].split(' ')[0];
+        const currentSpot = AppState.market[asset] ? AppState.market[asset].price : (t.underlyingAtEntry || 0);
+        const val = getLiveTradeValuation(t);
+        const currentPrice = val.price;
+
+        const feeData = computeTradeFees(t, currentPrice, currentSpot);
+        openNetPnlTotal += feeData.netPnl;
+        openFeesTotal += feeData.totalFee;
+
+        let strikeCellHTML = '';
+        if (t.isSpread) {
+            const lCur = (t.longLeg.current || t.longLeg.entry).toFixed(2);
+            const sCur = (t.shortLeg.current || t.shortLeg.entry).toFixed(2);
+            strikeCellHTML = `
+                <div class="legs-box">
+                    <div class="leg-row">
+                        <span class="badge badge-call" style="font-size:10px; padding:1px 4px;">BUY</span>
+                        <strong>$${t.longLeg.strike}</strong> ${renderChartIcon(t.longLeg.symbol, 'Long Leg Chart')}
+                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.longLeg.entry.toFixed(2)} → Mark: $${lCur}</span>
+                    </div>
+                    <div class="leg-row">
+                        <span class="badge badge-put" style="font-size:10px; padding:1px 4px;">SELL</span>
+                        <strong>$${t.shortLeg.strike}</strong> ${renderChartIcon(t.shortLeg.symbol, 'Short Leg Chart')}
+                        <span class="fee-subtext" style="display:inline; margin:0 0 0 4px;">Entry: $${t.shortLeg.entry.toFixed(2)} → Mark: $${sCur}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            const strikeVal = t.strike || (t.contract.includes('-') ? t.contract.split('-')[2] : '--');
+            strikeCellHTML = `
+                <div class="leg-row">
+                    <span class="badge ${t.side === 'CALL' ? 'badge-call' : 'badge-put'}" style="font-size:10px; padding:1px 4px;">${t.side}</span>
+                    <strong>$${strikeVal}</strong> ${renderChartIcon(t.contract, 'Option Chart')}
+                </div>
+            `;
+        }
+
+        const tradeTier = resolveTradeTier(t);
+        const tierBadge = renderTierBadge(tradeTier);
+
+        const srcBadge = (t.source && t.source.startsWith('AUTO'))
+            ? `<span class="badge-cloud" style="margin-left:4px;">⚡ AUTO</span>`
+            : (t.source === 'CLOUD_AUTOPICK' ? `<span class="badge-cloud" style="margin-left:4px;">☁️ AUTO</span>` : `<span class="badge-fee" style="margin-left:4px;">MANUAL</span>`);
+
+        const t1Status = t.t1Reached ? `<span class="badge-strict" style="margin-left:4px;">🔒 T1 LOCKED</span>` : '';
+
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatTime(t.time)}</td>
+            <td>
+                ${tierBadge}
+                <span class="badge ${t.isSpread ? 'badge-spread' : (t.side === 'CALL' ? 'badge-call' : 'badge-put')}" style="margin-left:4px;">${t.isSpread ? 'DEBIT SPREAD' : t.side}</span>
+                ${srcBadge}${t1Status}
+            </td>
+            <td><strong>${asset}</strong></td>
+            <td><strong>${t.contract}</strong></td>
+            <td>${strikeCellHTML}</td>
+            <td><strong>$${t.entry.toFixed(2)}</strong></td>
+            <td><strong>$${currentPrice.toFixed(2)}</strong></td>
+            <td style="text-align:center;">
+                <input type="number" class="qty-input" min="0.01" step="any" value="${t.qty}" onchange="updateTradeQty(${t.id}, this.value)">
+            </td>
+            <td style="color:var(--yellow); font-size:12px;">-$${feeData.totalFee.toFixed(3)}</td>
+            <td class="up"><strong>$${(t.t1 || 0).toFixed(2)}</strong>${t.t2 ? `<span class="fee-subtext" style="color:var(--green);">T2: $${t.t2.toFixed(2)}</span>` : ''}</td>
+            <td class="down"><strong>$${(t.sl1 || 0).toFixed(2)}</strong>${t.slStrikes ? `<span class="fee-subtext" style="color:var(--red);">Wick Check: ${t.slStrikes}/${AppState.settings.antiWickConfirmations || 2}</span>` : ''}</td>
+            <td class="${feeData.grossPnl >= 0 ? 'up' : 'down'}">$${feeData.grossPnl.toFixed(2)}</td>
+            <td class="${feeData.netPnl >= 0 ? 'up' : 'down'}" style="font-weight:bold;">$${feeData.netPnl.toFixed(2)}</td>
+            <td>
+                ${!t.isSpread ? `<button class="chart-btn" onclick="window.open('${getBinanceOptionUrl(t.contract)}', '_blank')" title="Binance Chart">📈</button>` : ''}
+                <button class="primary" onclick="closePaperTrade(${t.id})" style="padding:4px 8px;">Close</button>
+                <button onclick="deletePaperTrade(${t.id})" style="padding:4px 8px;">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    renderTradeHistory();
+    updateSessionStatsUI();
+
+    let realizedNetPnl = AppState.tradeHistory.reduce((sum, tr) => sum + (tr.netPnl || 0), 0);
+    let realizedFees = AppState.tradeHistory.reduce((sum, tr) => sum + (tr.totalFee || 0), 0);
+    
+    document.getElementById('pt-open-pnl').innerText = `$${openNetPnlTotal.toFixed(2)}`;
+    document.getElementById('pt-open-pnl').className = openNetPnlTotal >= 0 ? 'up' : 'down';
+    document.getElementById('pt-realized-pnl').innerText = `$${realizedNetPnl.toFixed(2)}`;
+    document.getElementById('pt-realized-pnl').className = realizedNetPnl >= 0 ? 'up' : 'down';
+    document.getElementById('pt-total-pnl').innerText = `$${(realizedNetPnl + openNetPnlTotal).toFixed(2)}`;
+    document.getElementById('pt-total-pnl').className = (realizedNetPnl + openNetPnlTotal) >= 0 ? 'up' : 'down';
+    document.getElementById('pt-total-fees').innerText = `$${(realizedFees + openFeesTotal).toFixed(2)}`;
+    
+    let totalClosed = AppState.tradeHistory.length;
+    let wins = AppState.tradeHistory.filter(tr => (tr.netPnl || 0) > 0).length;
+    document.getElementById('pt-total-trades').innerText = `${totalClosed} closed trades (${AppState.paperTrades.length} open)`;
+    document.getElementById('pt-winrate').innerText = totalClosed > 0 ? `${Math.round((wins/totalClosed)*100)}%` : '0%';
+}
+
+function renderTradeHistory() {
+    let tbody = document.getElementById('history-body');
+    tbody.innerHTML = '';
+    const closedCountEl = document.getElementById('closed-history-count');
+    if (closedCountEl) closedCountEl.innerText = AppState.tradeHistory.length;
+
+    if (!AppState.tradeHistory.length) {
+        document.getElementById('no-history-msg').style.display = 'block';
+        return;
+    }
+    document.getElementById('no-history-msg').style.display = 'none';
+
+    [...AppState.tradeHistory].reverse().forEach((tr, revIdx) => {
+        const asset = tr.asset || tr.contract.split('-')[0].split(' ')[0];
+        let strikeCellHTML = '';
+        if (tr.isSpread && tr.longLeg && tr.shortLeg) {
+            strikeCellHTML = `
+                <div class="legs-box">
+                    <div class="leg-row">
+                        <span class="badge badge-call" style="font-size:10px; padding:1px 4px;">BUY</span>
+                        <strong>$${tr.longLeg.strike}</strong> ${renderChartIcon(tr.longLeg.symbol, 'Long Leg Chart')}
+                    </div>
+                    <div class="leg-row">
+                        <span class="badge badge-put" style="font-size:10px; padding:1px 4px;">SELL</span>
+                        <strong>$${tr.shortLeg.strike}</strong> ${renderChartIcon(tr.shortLeg.symbol, 'Short Leg Chart')}
+                    </div>
+                </div>
+            `;
+        } else {
+            const strikeVal = tr.strike || (tr.contract.includes('-') ? tr.contract.split('-')[2] : '--');
+            strikeCellHTML = `
+                <div class="leg-row">
+                    <span class="badge ${tr.side === 'CALL' ? 'badge-call' : 'badge-put'}" style="font-size:10px; padding:1px 4px;">${tr.side}</span>
+                    <strong>$${strikeVal}</strong> ${renderChartIcon(tr.contract, 'Option Chart')}
+                </div>
+            `;
+        }
+
+        const tradeTier = resolveTradeTier(tr);
+        const tierBadge = renderTierBadge(tradeTier);
+        const srcBadge = (tr.source && tr.source.startsWith('AUTO'))
+            ? `<span class="badge-cloud" style="margin-left:4px;">⚡ AUTO</span>`
+            : (tr.source === 'CLOUD_AUTOPICK' ? `<span class="badge-cloud" style="margin-left:4px;">☁️ AUTO</span>` : `<span class="badge-fee" style="margin-left:4px;">MANUAL</span>`);
+
+        const reason = tr.closeReason || 'MANUAL';
+        const reasonClass = reason.startsWith('TARGET') ? 'badge-call' : (reason === 'STOP_LOSS' ? 'badge-put' : 'badge-fee');
+
+        let row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${formatTime(tr.closeTime || tr.time)}</td>
+            <td>
+                ${tierBadge}
+                <span class="badge ${tr.isSpread ? 'badge-spread' : (tr.side === 'CALL' ? 'badge-call' : 'badge-put')}" style="margin-left:4px;">${tr.isSpread ? 'DEBIT SPREAD' : tr.side}</span>
+                ${srcBadge}
+            </td>
+            <td><strong>${asset}</strong></td>
+            <td><strong>${tr.contract}</strong></td>
+            <td>${strikeCellHTML}</td>
+            <td>$${tr.entry.toFixed(2)}</td>
+            <td>$${(tr.exit || 0).toFixed(2)}</td>
+            <td>${tr.qty}</td>
+            <td style="color:var(--yellow);">-$${(tr.totalFee || 0).toFixed(3)}</td>
+            <td class="${(tr.grossPnl || 0) >= 0 ? 'up' : 'down'}">$${(tr.grossPnl || 0).toFixed(2)}</td>
+            <td class="${(tr.netPnl || 0) >= 0 ? 'up' : 'down'}" style="font-weight:bold;">$${(tr.netPnl || 0).toFixed(2)}</td>
+            <td><span class="badge ${reasonClass}">${reason}</span></td>
+            <td><button onclick="deleteClosedHistoryItem(${revIdx})" style="padding:3px 7px; font-size:11px;" title="Remove this entry from history">✕</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+/* =========================================================
+   10. SUPABASE 24/7 CLOUD SYNC ADAPTER
+========================================================= */
+const CloudConfig = {
+    url: (localStorage.getItem('sbUrl') || '').replace(/\/$/, ''),
+    key: localStorage.getItem('sbKey') || '',
+    workerUrl: (localStorage.getItem('cfWorkerUrl') || '').replace(/\/$/, ''),
+    pushing: false
+};
+
+document.getElementById('set-sb-url').value = CloudConfig.url;
+document.getElementById('set-sb-key').value = CloudConfig.key;
+document.getElementById('set-worker-url').value = CloudConfig.workerUrl;
+
+function sbHeaders() {
+    return {
+        'apikey': CloudConfig.key,
+        'Authorization': `Bearer ${CloudConfig.key}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+    };
+}
+
+async function pullCloudState() {
+    if (!CloudConfig.url || !CloudConfig.key || CloudConfig.pushing) return;
+    try {
+        const res = await fetch(`${CloudConfig.url}/rest/v1/engine_state?id=eq.1&select=*`, { headers: sbHeaders() });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        if (!rows || !rows.length) return;
+        const row = rows[0];
+
+        if (Array.isArray(row.paper_trades) && row.paper_trades.length > AppState.paperTrades.length) {
+            AppState.paperTrades = row.paper_trades;
+            localStorage.setItem('paperTrades', JSON.stringify(AppState.paperTrades));
+        }
+        const recentlyCleared = AppState.historyClearedAt && (Date.now() - AppState.historyClearedAt < 30000);
+        if (!recentlyCleared && Array.isArray(row.trade_history) && row.trade_history.length > AppState.tradeHistory.length) {
+            AppState.tradeHistory = row.trade_history;
+            localStorage.setItem('tradeHistory', JSON.stringify(AppState.tradeHistory));
+        }
+
+        const lastRunMs = row.last_cron_run ? new Date(row.last_cron_run).getTime() : 0;
+        const lastRunAgo = lastRunMs ? `${ago(lastRunMs)} ago` : 'never';
+        const statusMsg = `${row.cron_status || 'Connected'} · Last worker tick: ${lastRunAgo}`;
+
+        updateSourceStatus('cloud', 'LIVE', statusMsg);
+        document.getElementById('settings-cloud-badge').innerText = 'CONNECTED';
+        document.getElementById('cloud-mode-pill').innerText = `AUTO-EXEC LIVE (${AppState.paperTrades.length} OPEN)`;
+        renderPaperTrades();
+    } catch (err) {
+        updateSourceStatus('cloud', 'LOCAL ACTIVE', 'Running local auto-exec');
+    }
+}
+
+async function pushCloudState(patchObj) {
+    if (!CloudConfig.url || !CloudConfig.key) return;
+    CloudConfig.pushing = true;
+    try {
+        const res = await fetch(`${CloudConfig.url}/rest/v1/engine_state?id=eq.1`, {
+            method: 'PATCH',
+            headers: sbHeaders(),
+            body: JSON.stringify(patchObj)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        updateSourceStatus('cloud', 'LIVE', 'Synced to Supabase Cloud');
+    } catch (err) {
+        updateSourceStatus('cloud', 'LOCAL ACTIVE', 'Local engine active');
+    } finally {
+        CloudConfig.pushing = false;
+    }
+}
+
+async function manualCloudTick() {
+    const btn = document.getElementById('btn-cloud-tick');
+    btn.innerText = '⏳ Syncing...';
+    try {
+        await Promise.all([
+            fetchSpotData(),
+            fetchCryptoFundamentals(),
+            fetchNewsAndMacro(false)
+        ]);
+        if (CloudConfig.url && CloudConfig.key) {
+            if (CloudConfig.workerUrl) await fetch(CloudConfig.workerUrl);
+            await pullCloudState();
+        }
+        evaluateSetups();
+        btn.innerText = '✅ Synced!';
+        showToast('⚡ All 4 Pillars (Chart TA, Perp Fundamentals, News NLP, Option Chains) refreshed.');
+    } catch (e) {
+        btn.innerText = '⚠️ Error';
+    }
+    setTimeout(() => { btn.innerText = '⚡ Sync All Feeds'; }, 2000);
+}
+
+/* =========================================================
+   11. BOOTSTRAPPER & ENGINE TIMERS
+========================================================= */
+const marketContainer = document.getElementById('market-cards-container');
+ALL.forEach(a => {
+    const id = a.toLowerCase();
+    marketContainer.insertAdjacentHTML('beforeend', `
+        <div class="card" id="card-${id}">
+            <div class="card-header">${NAMES[a]} (${a}) <span id="${id}-trend" class="badge">--</span></div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <div>
+                    <div style="font-size: 24px; font-weight: bold;" id="${id}-price">$--</div>
+                    <div id="${id}-change" class="up">--%</div>
+                </div>
+                <div style="text-align: right; font-size: 12px; color: var(--text-muted);">
+                    <div>RSI (14): <span id="${id}-rsi" style="color:var(--text-main);">--</span></div>
+                    <div>4-Pillar Score: <span id="${id}-score" style="color:var(--text-main); font-weight:bold;">--/100</span></div>
+                </div>
+            </div>
+            <div id="${id}-detail" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;line-height:1.7;color:var(--text-muted);">Syncing spot, derivatives fundamentals & news feeds...</div>
+        </div>
+    `);
+});
+
+document.getElementById('set-alts').innerHTML = ALT.map(a => `<label style="display:inline-flex;gap:4px;align-items:center;"><input type="checkbox" value="${a}" style="width:auto;margin:0;"> ${a}</label>`).join('');
+
+function syncAssets() {
+    const on = ACTIVE();
+    ALL.forEach(a => {
+        const c = document.getElementById('card-' + a.toLowerCase());
+        if (c) c.style.display = on.includes(a) ? '' : 'none';
+    });
+    document.querySelectorAll('#set-alts input').forEach(i => i.checked = on.includes(i.value));
+}
+
+function applyAssets() {
+    syncAssets();
+    connectAltWebSocket();
+    fetchSpotData();
+    fetchCryptoFundamentals();
+}
+
+async function initApp() {
+    syncAssets();
+    refreshFeedStatus();
+    connectOptionsWebSocket();
+    connectAltWebSocket();
+
+    if (CloudConfig.url && CloudConfig.key) {
+        await pullCloudState();
+    }
+
+    setInterval(() => {
+        evaluateSetups();
+        let now = new Date();
+        document.getElementById('last-update').innerText = `Last refresh: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    }, 2000);
+
+    setInterval(fetchSpotData, 15000);
+    setInterval(fetchCryptoFundamentals, 30000);
+    setInterval(() => fetchNewsAndMacro(false), 60000);
+    setInterval(pullCloudState, 10000);
+
+    setInterval(() => {
+        const now = Date.now();
+        const silentFor = Feed.wsAt ? now - Feed.wsAt : (Feed.wsOpenedAt ? now - Feed.wsOpenedAt : 0);
+        if (Feed.wsOpen && silentFor > 45000 && wsConnection) { try { wsConnection.close(); } catch (e) {} }
+        refreshFeedStatus();
+    }, 1000);
+
+    setInterval(() => { if (!(Feed.wsAt && Date.now() - Feed.wsAt < 20000)) seedOptionsData(); }, 15000);
+
+    await Promise.all([
+        seedOptionsData(),
+        fetchSpotData(),
+        fetchCryptoFundamentals(),
+        fetchNewsAndMacro(false)
+    ]);
+    evaluateSetups();
+}
+
+initApp();
+</script>
+</body>
+</html>
